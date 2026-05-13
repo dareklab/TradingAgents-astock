@@ -73,7 +73,7 @@ class _ReportPDF(FPDF):
     def header(self) -> None:
         self._use_font("", 8)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 6, f"TradingAgents-Astock A股分析  |  {self.ticker}  |  {self.trade_date}", align="C")
+        self.cell(0, 6, f"A股多Agent投研分析  |  {self.ticker}  |  {self.trade_date}", align="C")
         self.ln(8)
         self.set_draw_color(60, 60, 60)
         self.line(10, self.get_y(), self.w - 10, self.get_y())
@@ -89,14 +89,9 @@ class _ReportPDF(FPDF):
         self.add_page()
         self.ln(60)
 
-        self._use_font("B", 28)
-        self.set_text_color(30, 30, 30)
-        self.cell(0, 15, "TradingAgents-Astock", align="C")
-        self.ln(12)
-
-        self._use_font("B", 20)
+        self._use_font("B", 24)
         self.set_text_color(255, 90, 31)
-        self.cell(0, 12, "A股分析报告", align="C")
+        self.cell(0, 12, "A股多Agent投研分析报告", align="C")
         self.ln(20)
 
         self._use_font("B", 36)
@@ -123,7 +118,7 @@ class _ReportPDF(FPDF):
             0, 5,
             "免责声明: 本报告由 AI 多 Agent 系统自动生成, 仅供学习研究与技术演示, "
             "不构成任何投资建议。投资决策请咨询持牌专业机构。"
-            "作者不对使用本工具产生的任何损失承担责任。",
+            "使用本报告所产生的任何损失由使用者自行承担。",
             align="C",
         )
 
