@@ -1,6 +1,7 @@
 services:
   tradingagents:
     build: .
+    image: tradingagents-astock:latest
     env_file:
       - .env
     volumes:
