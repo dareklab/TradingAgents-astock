@@ -102,7 +102,7 @@ start_container() {
         sleep 1
     fi
 
-    log_step "启动容器（端口: $PORT）..."
+    log_step "启动容器（端口: ${PORT}）..."
 
     docker run -d --rm \
         --name "$CONTAINER_NAME" \
