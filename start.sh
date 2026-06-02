@@ -13,8 +13,8 @@ set -euo pipefail
 
 # ── 配置 ──────────────────────────────────────────────
 PROJECT_DIR="${PROJECT_DIR:-$HOME/ai-code/trade/TradingAgents-astock}"
-IMAGE="tradingagents-astock-tradingagents:latest"
-CONTAINER_NAME="tradingagents-web"
+IMAGE="trading-agents-astock:latest"
+CONTAINER_NAME="trading-agents-web"
 PORT="${PORT:-8501}"
 ENV_FILE="$PROJECT_DIR/.env"
 
