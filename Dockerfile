@@ -19,6 +19,8 @@ COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 RUN useradd --create-home appuser && \
+    mkdir -p /home/appuser/.tradingagents/cache && \
+    chown -R appuser:appuser /home/appuser/.tradingagents && \
     su appuser -c "/opt/venv/bin/python -m mootdx bestip" || true
 USER appuser
 WORKDIR /home/appuser/app
