@@ -18,6 +18,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
+# Install CJK font for PDF export (wqy-microhei ~4 MB)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fonts-wqy-microhei && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN useradd --create-home appuser && \
     mkdir -p /home/appuser/.tradingagents/cache && \
     chown -R appuser:appuser /home/appuser/.tradingagents && \
