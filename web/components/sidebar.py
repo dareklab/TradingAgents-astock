@@ -6,6 +6,7 @@ from datetime import date
 
 import streamlit as st
 
+from tradingagents.dataflows.a_stock import get_stock_display_name
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
 from web.history import get_history
 
@@ -167,7 +168,7 @@ def render_sidebar() -> None:
 
     for entry in history[:20]:
         t, d = entry["ticker"], entry["date"]
-        label = f"{t}  ·  {d}"
+        label = f"{get_stock_display_name(t)}  ·  {d}"
         if st.button(label, key=f"hist_{t}_{d}", use_container_width=True):
             st.session_state["viewing_history"] = entry["path"]
             st.session_state["start_analysis"] = None

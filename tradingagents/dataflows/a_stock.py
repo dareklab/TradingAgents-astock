@@ -14,21 +14,21 @@ Data sources:
 
 from __future__ import annotations
 
-from typing import Annotated
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
 import json as _json
-import os
 import logging
 import math
+import os
 import random
 import re as _re
 import time
-import uuid
 import urllib.request
+import uuid
+from datetime import datetime
+from typing import Annotated
 
 import pandas as pd
 import requests as _requests
+from dateutil.relativedelta import relativedelta
 
 from .utils import safe_ticker_component
 
@@ -136,6 +136,33 @@ def resolve_ticker(user_input: str) -> str:
         raise ValueError(f"'{s}' 匹配到多只股票: {examples}，请输入完整名称或代码")
 
     raise ValueError(f"找不到股票 '{s}'，请检查名称是否正确")
+
+
+def get_stock_display_name(ticker: str) -> str:
+    """Return ``股票名称(股票代码)`` formatted string for a ticker.
+
+    If the ticker is already a 6-digit code, uses it directly; otherwise
+    resolves via :func:`resolve_ticker`.  Falls back to just the code when
+    the stock name cannot be found in the mootdx mapping.
+
+    Examples::
+
+        >>> get_stock_display_name("600379")
+        '宝光股份(600379)'
+        >>> get_stock_display_name("比亚迪")
+        '比亚迪(002594)'
+    """
+    try:
+        code = resolve_ticker(ticker)
+    except ValueError:
+        # If we can't resolve, use the input as-is and try to look up
+        code = _normalize_ticker(ticker) if not any("一" <= ch <= "鿿" for ch in ticker) else ticker
+
+    _, c2n = _build_name_code_map()
+    name = c2n.get(code)
+    if name:
+        return f"{name}({code})"
+    return code
 
 
 # ---------------------------------------------------------------------------

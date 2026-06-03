@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from tradingagents.dataflows.a_stock import get_stock_display_name
 from web.progress import PIPELINE_STAGES, ProgressTracker
 
 
@@ -30,7 +31,7 @@ def render_progress(tracker: ProgressTracker) -> None:
                 分析进行中
             </span>
             <span style="font-size:1.1rem; color:#888; margin-left:0.8rem;">
-                {tracker.ticker}
+                {get_stock_display_name(tracker.ticker)}
             </span>
         </div>
         """,

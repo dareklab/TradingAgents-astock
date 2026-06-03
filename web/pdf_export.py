@@ -10,6 +10,7 @@ from typing import Any
 
 from fpdf import FPDF
 
+from tradingagents.dataflows.a_stock import get_stock_display_name
 
 # Per-OS CJK font candidates. The current OS's fonts are tried first so a
 # user on Windows/Linux/macOS all get a working PDF without manual config.
@@ -132,6 +133,8 @@ class _ReportPDF(FPDF):
         self.ticker = ticker
         self.trade_date = trade_date
         self.signal = signal
+        self.display_name = get_stock_display_name(ticker)
+        self.date_compact = trade_date.replace("-", "")
         font_path = _find_cjk_font()
         if not font_path:
             raise RuntimeError(
@@ -148,7 +151,7 @@ class _ReportPDF(FPDF):
     def header(self) -> None:
         self._use_font("", 8)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 6, f"A股多Agent投研分析  |  {self.ticker}  |  {self.trade_date}", align="C")
+        self.cell(0, 6, f"A股多Agent投研分析  |  {self.display_name}  |  {self.trade_date}", align="C")
         self.ln(8)
         self.set_draw_color(60, 60, 60)
         self.line(10, self.get_y(), self.w - 10, self.get_y())
@@ -173,9 +176,9 @@ class _ReportPDF(FPDF):
         self.cell(0, 12, "A股多Agent投研分析报告", align="C")
         self.ln(20)
 
-        self._use_font("B", 36)
+        self._use_font("B", 28)
         self.set_text_color(30, 30, 30)
-        self.cell(0, 18, self.ticker, align="C")
+        self.cell(0, 18, f"{self.display_name}-{self.date_compact}", align="C")
         self.ln(16)
 
         self._use_font("", 14)
@@ -386,8 +389,10 @@ def generate_markdown(final_state: dict[str, Any], ticker: str, trade_date: str,
     This is the bulletproof alternative to PDF when the system lacks a CJK
     font (common on minimal Linux/Windows installs).
     """
+    display_name = get_stock_display_name(ticker)
+    date_compact = trade_date.replace("-", "")
     out = [
-        "# A股多Agent投研分析报告",
+        f"# {display_name}-{date_compact}",
         "",
         f"- **股票代码**：{ticker}",
         f"- **分析日期**：{trade_date}",

@@ -7,6 +7,7 @@ from typing import Any
 
 import streamlit as st
 
+from tradingagents.dataflows.a_stock import get_stock_display_name
 from web.pdf_export import generate_markdown, generate_pdf
 
 
@@ -44,6 +45,8 @@ def render_report(
     """Render the full analysis report."""
 
     color, cn_signal = _signal_style(signal)
+    display_name = get_stock_display_name(ticker)
+    date_compact = trade_date.replace("-", "")
 
     stats_html = ""
     if elapsed is not None:
@@ -65,7 +68,7 @@ def render_report(
                 {signal.upper()}
             </div>
             <div style="font-size:1.2rem; color:#f5f1eb;">
-                {ticker} · {trade_date}
+                {display_name} · {trade_date}
             </div>
             {stats_html}
         </div>
@@ -83,7 +86,7 @@ def render_report(
         st.download_button(
             "📥 下载 Markdown",
             data=md_text.encode("utf-8"),
-            file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.md",
+            file_name=f"{display_name}-{date_compact}.md",
             mime="text/markdown",
             use_container_width=True,
         )
@@ -93,7 +96,7 @@ def render_report(
             st.download_button(
                 "📄 下载 PDF",
                 data=pdf_bytes,
-                file_name=f"TradingAgents-Astock_{ticker}_{trade_date}.pdf",
+                file_name=f"{display_name}-{date_compact}.pdf",
                 mime="application/pdf",
                 use_container_width=True,
             )
