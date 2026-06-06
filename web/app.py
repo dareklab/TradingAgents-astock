@@ -229,8 +229,9 @@ viewing_history: str | None = st.session_state.get("viewing_history")
 # State 1: Viewing a historical analysis
 if viewing_history:
     try:
-        state = load_analysis(viewing_history)
-        signal = extract_signal(state)
+        with st.spinner("⏳ 正在加载历史报告..."):
+            state = load_analysis(viewing_history)
+            signal = extract_signal(state)
         ticker = Path(viewing_history).parent.parent.name
         trade_date = Path(viewing_history).stem.replace("full_states_log_", "")
         render_report(state, ticker, trade_date, signal)
