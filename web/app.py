@@ -234,6 +234,7 @@ if viewing_history:
         ticker = Path(viewing_history).parent.parent.name
         trade_date = Path(viewing_history).stem.replace("full_states_log_", "")
         render_report(state, ticker, trade_date, signal)
+        st.toast("✅ 历史报告加载完成", icon="✅")
     except Exception as exc:
         st.error(f"加载失败: {exc}")
 

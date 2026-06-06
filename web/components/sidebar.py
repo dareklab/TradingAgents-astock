@@ -13,8 +13,8 @@ from web.history import get_history
 
 # Provider display names in recommended order
 _PROVIDERS: list[tuple[str, str]] = [
-    ("MiniMax（推荐·国内直连）", "minimax"),
-    ("DeepSeek", "deepseek"),
+    ("DeepSeek（默认）", "deepseek"),
+    ("MiniMax（国内直连）", "minimax"),
     ("通义千问 Qwen", "qwen"),
     ("智谱 GLM", "glm"),
     ("OpenAI", "openai"),
@@ -163,8 +163,7 @@ def render_sidebar() -> None:
     st.markdown("---")
     st.markdown("#### 历史记录")
 
-    with st.spinner("加载历史记录..."):
-        history = get_history()
+    history = get_history()
 
     if not history:
         st.caption("暂无历史记录")
