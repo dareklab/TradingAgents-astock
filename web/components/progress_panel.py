@@ -46,6 +46,13 @@ def render_progress(tracker: ProgressTracker) -> None:
     pct = completed / total if total else 0
     st.progress(pct, text=f"{completed}/{total} 阶段完成  ·  {_format_time(tracker.elapsed)}")
 
+    # Stop button
+    c_stop, _ = st.columns([1, 4])
+    with c_stop:
+        if st.button("⏹ 停止分析", use_container_width=True, type="secondary"):
+            tracker.request_stop()
+            st.rerun()
+
     analyst_stages = PIPELINE_STAGES[:7]
     post_stages = PIPELINE_STAGES[7:]
 

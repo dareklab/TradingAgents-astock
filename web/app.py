@@ -253,10 +253,13 @@ elif tracker and tracker.is_complete:
         elapsed=tracker.elapsed,
     )
 
-# State 4: Analysis errored
+# State 4: Analysis errored / cancelled
 elif tracker and tracker.error:
-    st.error(f"分析失败: {tracker.error}")
-    if st.button("重试"):
+    if "中止" in tracker.error:
+        st.warning(f"⏹ {tracker.error}")
+    else:
+        st.error(f"分析失败: {tracker.error}")
+    if st.button("重新开始"):
         st.session_state.pop("tracker", None)
         st.rerun()
 

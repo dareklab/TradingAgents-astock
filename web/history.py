@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +17,8 @@ def _results_dir() -> Path:
 def get_history() -> list[dict[str, str]]:
     """Scan saved analysis logs and return a sorted list (newest first).
 
-    Each entry: {"ticker": "300750", "date": "2026-05-12", "path": "/abs/path/...json"}
+    Each entry: {"ticker": "300750", "date": "2026-06-03",
+                  "time": "2026-06-03 14:30:52", "path": "/abs/path/...json"}
     """
     root = _results_dir()
     if not root.exists():
@@ -28,9 +31,19 @@ def get_history() -> list[dict[str, str]]:
             continue
         date = match.group(1)
         ticker = log_file.parent.parent.name
-        entries.append({"ticker": ticker, "date": date, "path": str(log_file)})
+        # Use file modification time as the analysis timestamp
+        mtime = os.path.getmtime(log_file)
+        time_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+        entries.append({
+            "ticker": ticker,
+            "date": date,
+            "time": time_str,
+            "mtime": mtime,
+            "path": str(log_file),
+        })
 
-    entries.sort(key=lambda e: e["date"], reverse=True)
+    # Sort by modification time descending (most recent first)
+    entries.sort(key=lambda e: e["mtime"], reverse=True)
     return entries
 
 

@@ -111,9 +111,6 @@ def render_sidebar() -> None:
             <div style="font-size:0.85rem; color:#888; margin-top:0.2rem;">
                 A股多Agent投研系统
             </div>
-            <div style="font-size:0.7rem; color:#555; margin-top:0.3rem;">
-                by <a href="https://github.com/simonlin1212" style="color:#ff5a1f; text-decoration:none;">simonlin1212</a>
-            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -172,9 +169,9 @@ def render_sidebar() -> None:
         return
 
     for entry in history[:20]:
-        t, d = entry["ticker"], entry["date"]
-        label = f"{get_stock_display_name(t)}  ·  {d}"
-        if st.button(label, key=f"hist_{t}_{d}", use_container_width=True):
+        t, d, ts = entry["ticker"], entry["date"], entry["time"]
+        label = f"{get_stock_display_name(t)}  ·  {ts}"
+        if st.button(label, key=f"hist_{t}_{d}_{ts}", use_container_width=True):
             st.session_state["viewing_history"] = entry["path"]
             st.session_state["start_analysis"] = None
 

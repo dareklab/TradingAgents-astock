@@ -109,6 +109,11 @@ def _run(ticker: str, trade_date: str, config: dict, tracker: ProgressTracker) -
         s = stats.get_stats()
         tracker.update_stats(s["llm_calls"], s["tool_calls"], s["tokens_in"], s["tokens_out"])
 
+        # Check for user-requested stop
+        if tracker.stop_requested:
+            tracker.mark_error("用户中止分析")
+            return
+
     signal = graph.process_signal(last_chunk.get("final_trade_decision", ""))
 
     graph.ticker = ticker
