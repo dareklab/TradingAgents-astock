@@ -7,6 +7,7 @@ from datetime import date
 import streamlit as st
 
 from tradingagents.dataflows.a_stock import get_stock_display_name
+from tradingagents.dataflows.trading_calendar import resolve_analysis_date
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
 from web.history import get_history
 
@@ -152,9 +153,13 @@ def render_sidebar() -> None:
         else:
             if resolved_code != ticker.strip():
                 st.success(f"✅ {ticker.strip()} → {resolved_code}")
+            raw_date = trade_date.strftime("%Y-%m-%d")
+            resolved_date = resolve_analysis_date(raw_date)
+            if resolved_date != raw_date:
+                st.info(f"📅 {raw_date} 非交易日，已自动使用最近交易日 {resolved_date}")
             st.session_state["start_analysis"] = {
                 "ticker": resolved_code,
-                "trade_date": trade_date.strftime("%Y-%m-%d"),
+                "trade_date": resolved_date,
             }
             st.session_state["viewing_history"] = None
 

@@ -7,7 +7,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-
 PIPELINE_STAGES: list[dict[str, str]] = [
     {"id": "market", "name": "技术分析", "icon": "📊", "report_key": "market_report"},
     {"id": "social", "name": "情绪分析", "icon": "💬", "report_key": "sentiment_report"},
@@ -44,6 +43,10 @@ class ProgressTracker:
 
     final_state: dict[str, Any] = field(default_factory=dict)
     signal: str = ""
+
+    # Data health: per-endpoint status, populated by quality gate parser
+    # {"endpoint_name": {"status": "ok|partial|fail", "message": "..."}}
+    data_health: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     llm_calls: int = 0
     tool_calls: int = 0
@@ -94,3 +97,21 @@ class ProgressTracker:
             if stage_id == self.current_stage:
                 return "active"
             return "pending"
+
+    def record_data_health(self, endpoint: str, status: str, message: str = "") -> None:
+        """Record the health status of a data endpoint."""
+        with self._lock:
+            self.data_health[endpoint] = {
+                "status": status,
+                "message": message,
+            }
+
+    def get_data_health_summary(self) -> dict[str, int]:
+        """Return counts by status: {ok: N, partial: N, fail: N}."""
+        with self._lock:
+            counts = {"ok": 0, "partial": 0, "fail": 0}
+            for entry in self.data_health.values():
+                s = entry.get("status", "")
+                if s in counts:
+                    counts[s] += 1
+            return counts

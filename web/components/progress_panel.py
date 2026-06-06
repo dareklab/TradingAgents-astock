@@ -27,12 +27,15 @@ def render_progress(tracker: ProgressTracker) -> None:
     st.markdown(
         f"""
         <div style="text-align:center; margin:1rem 0 0.5rem;">
+            <div style="font-size:0.8rem; color:#888; letter-spacing:2px; margin-bottom:0.3rem;">
+                🔄 新分析已启动
+            </div>
             <span style="font-size:1.6rem; font-weight:700; color:#f5f1eb;">
-                分析进行中
-            </span>
-            <span style="font-size:1.1rem; color:#888; margin-left:0.8rem;">
                 {get_stock_display_name(tracker.ticker)}
             </span>
+            <div style="font-size:0.9rem; color:#555; margin-top:0.2rem;">
+                {tracker.trade_date}
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -93,6 +96,24 @@ def render_progress(tracker: ProgressTracker) -> None:
     c2.metric("工具调用", tracker.tool_calls)
     c3.metric("输入 Tokens", f"{tracker.tokens_in:,}")
     c4.metric("输出 Tokens", f"{tracker.tokens_out:,}")
+
+    # Data health indicator
+    health = tracker.get_data_health_summary()
+    if health.get("fail", 0) > 0 or health.get("partial", 0) > 0:
+        fail_count = health.get("fail", 0)
+        partial_count = health.get("partial", 0)
+        ok_count = health.get("ok", 0)
+        st.warning(
+            f"📡 数据健康: {ok_count} 源正常"
+            + (f" / {partial_count} 源部分缺失" if partial_count else "")
+            + (f" / {fail_count} 源失败" if fail_count else "")
+        )
+        if tracker.data_health:
+            with st.expander("📡 数据源详情", expanded=False):
+                for endpoint, info in tracker.data_health.items():
+                    icon = {"ok": "🟢", "partial": "🟡", "fail": "🔴"}.get(info.get("status", ""), "⚪")
+                    msg = info.get("message", "") or ""
+                    st.caption(f"{icon} **{endpoint}**: {msg}")
 
     if tracker.error:
         st.error(f"错误: {tracker.error}")

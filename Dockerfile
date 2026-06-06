@@ -24,13 +24,15 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-COPY --from=builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Install CJK font for PDF export (cached permanently)
-RUN apt-get update && \
+# Install CJK font (cached permanently — no dependency on builder)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
     apt-get install -y --no-install-recommends fonts-wqy-microhei && \
     rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 RUN useradd --create-home appuser && \
     mkdir -p /home/appuser/.tradingagents/cache && \

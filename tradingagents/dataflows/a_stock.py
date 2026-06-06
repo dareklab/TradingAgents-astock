@@ -251,22 +251,41 @@ _EM_MIN_INTERVAL = float(os.environ.get("EM_MIN_INTERVAL", "1.0"))
 _em_last_call = [0.0]  # 模块级上次东财请求时间戳
 
 
-def _em_get(url, params=None, headers=None, timeout=15, **kwargs):
-    """东财统一请求入口：自动节流 + 复用 session + 默认 UA。
+def _em_get(url, params=None, headers=None, timeout=15, max_retries=2, **kwargs):
+    """东财统一请求入口：自动节流 + 复用 session + 默认 UA + 重试。
 
     所有 eastmoney.com 接口都应通过它请求，避免多 Agent 高频拉数据被封 IP。
     串行限流：与上次东财请求间隔 < EM_MIN_INTERVAL 时 sleep 补足 + 0.1~0.5s 随机抖动。
     传入的 headers 会覆盖 session 默认 UA（用于保留各端点自己的 Referer/Origin）。
+
+    Retry: 对 ConnectionError / ReadTimeout 指数退避重试 (1s, 2s)，
+    最多 max_retries 次（默认 2 次 = 共 3 次尝试）。
+    HTTP 4xx/5xx 不重试（上游问题，重试无意义）。
     """
     wait = _EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
     if wait > 0:
         time.sleep(wait + random.uniform(0.1, 0.5))
-    try:
-        return _EM_SESSION.get(
-            url, params=params, headers=headers, timeout=timeout, **kwargs
-        )
-    finally:
-        _em_last_call[0] = time.time()
+
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            resp = _EM_SESSION.get(
+                url, params=params, headers=headers, timeout=timeout, **kwargs
+            )
+            return resp
+        except (_requests.ConnectionError, _requests.ReadTimeout) as e:
+            last_exc = e
+            if attempt < max_retries:
+                backoff = 2 ** attempt  # 1s, 2s
+                logger.warning(
+                    "_em_get attempt %d/%d failed for %s: %s, retrying in %ds",
+                    attempt + 1, max_retries + 1, url, e, backoff,
+                )
+                time.sleep(backoff)
+            else:
+                raise last_exc
+        finally:
+            _em_last_call[0] = time.time()
 
 
 def _eastmoney_datacenter(
@@ -399,8 +418,17 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
         if mtime.date() == datetime.now().date():
             data = pd.read_csv(cache_file, on_bad_lines="skip", encoding="utf-8")
             data["Date"] = pd.to_datetime(data["Date"])
+            # Even if cached today, check whether the cache actually covers
+            # the requested date (TDX servers may not have weekend updates).
+            max_cached = data["Date"].max()
             cutoff = pd.to_datetime(curr_date)
-            return data[data["Date"] <= cutoff]
+            if max_cached >= cutoff:
+                return data[data["Date"] <= cutoff]
+            logger.info(
+                "Cache for %s last date=%s < trade_date=%s, forcing refresh",
+                code, max_cached.strftime("%Y-%m-%d"), curr_date,
+            )
+            # Fall through to refresh
 
     # Fetch from mootdx — 800 daily bars (~3 years of trading days)
     try:
@@ -773,7 +801,7 @@ def get_fundamentals(
 
         header = f"# Company Fundamentals for {code} (A-stock)\n"
         header += (
-            f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"# Data retrieved on: {curr_date or datetime.now().strftime('%Y-%m-%d')}\n\n"
         )
 
         return header + "\n".join(lines)
@@ -857,7 +885,7 @@ def get_balance_sheet(
         header = f"# Balance Sheet for {code} (A-stock, {freq})\n"
         header += "# Data source: sina direct HTTP\n"
         header += (
-            f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"# Data retrieved on: {curr_date or datetime.now().strftime('%Y-%m-%d')}\n\n"
         )
 
         return header + csv_string
@@ -888,7 +916,7 @@ def get_cashflow(
         header = f"# Cash Flow for {code} (A-stock, {freq})\n"
         header += "# Data source: sina direct HTTP\n"
         header += (
-            f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"# Data retrieved on: {curr_date or datetime.now().strftime('%Y-%m-%d')}\n\n"
         )
 
         return header + csv_string
@@ -919,7 +947,7 @@ def get_income_statement(
         header = f"# Income Statement for {code} (A-stock, {freq})\n"
         header += "# Data source: sina direct HTTP\n"
         header += (
-            f"# Data retrieved on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"# Data retrieved on: {curr_date or datetime.now().strftime('%Y-%m-%d')}\n\n"
         )
 
         return header + csv_string
@@ -1240,7 +1268,7 @@ def get_insider_transactions(
 
 def get_profit_forecast(
     ticker: Annotated[str, "A-stock code"],
-    curr_date: Annotated[str, "current date (unused, for interface compat)"] = None,
+        curr_date: Annotated[str, "analysis date for report header"] = None,
 ) -> str:
     """Get consensus EPS forecasts with forward valuation (同花顺 direct HTTP)."""
     code = _normalize_ticker(ticker)
@@ -1254,7 +1282,7 @@ def get_profit_forecast(
         lines = [
             f"# Consensus EPS Forecast for {code} (A-stock)",
             f"# Source: 同花顺 analyst consensus (direct HTTP)",
-            f"# Retrieved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"# Retrieved: {curr_date or datetime.now().strftime('%Y-%m-%d')}",
             "",
         ]
 
@@ -1342,7 +1370,8 @@ def get_hot_stocks(
     import requests
 
     if not curr_date or curr_date.strip() == "":
-        curr_date = datetime.now().strftime("%Y-%m-%d")
+        from .trading_calendar import get_latest_trading_day
+        curr_date = get_latest_trading_day().strftime("%Y-%m-%d")
 
     try:
         url = (
@@ -1869,8 +1898,9 @@ def get_dragon_tiger_board(
                         f"  {row.get('OPERATEDEPT_NAME', '')} "
                         f"| {buy_amt:.0f} | {sell_amt:.0f} | {net:.0f}"
                     )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dragon_tiger_board seat details failed for %s: %s", code, e)
+        lines.append("\n> ⚠️ 席位明细获取失败（东财接口无数据）")
 
     # 3. 机构动向 — 从买卖席位明细筛选机构专用席位 (OPERATEDEPT_CODE="0")
     try:
@@ -1890,8 +1920,9 @@ def get_dragon_tiger_board(
                 f"| 卖出 {inst_sell/1e4:.0f} 万 "
                 f"| 净额 {(inst_buy - inst_sell)/1e4:.0f} 万"
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("dragon_tiger_board institution analysis failed for %s: %s", code, e)
+        lines.append("\n> ⚠️ 机构动向分析失败（东财接口无数据）")
 
     return "\n".join(lines)
 

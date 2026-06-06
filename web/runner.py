@@ -8,7 +8,6 @@ from typing import Any
 
 from web.progress import PIPELINE_STAGES, ProgressTracker
 
-
 _REPORT_KEY_TO_STAGE = {s["report_key"]: s["id"] for s in PIPELINE_STAGES}
 
 _ANALYST_REPORT_KEYS = [
@@ -20,6 +19,22 @@ _ANALYST_REPORT_KEYS = [
 def _strip_think_tags(text: str) -> str:
     """Remove <think>...</think> blocks from LLM output."""
     return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL).strip()
+
+
+def _ingest_quality_gate_health(dqs: str, tracker: ProgressTracker) -> None:
+    """Parse Quality Gate hard-check output to populate data health.
+
+    Looks for lines like: ``- 技术分析师: [A] 完整 (1234 chars)``
+    Maps A/B → ok, C → partial, D/F → fail.
+    """
+    # Match lines: "- 技术分析师: [A] 完整 (1234 chars)" or similar
+    pattern = re.compile(r"-\s+(.+分析师):\s*\[([A-F])\]\s*(.*)")
+    for line in dqs.splitlines():
+        m = pattern.match(line.strip())
+        if m:
+            name, grade, detail = m.group(1), m.group(2), m.group(3).strip()
+            status = "ok" if grade in ("A", "B") else "partial" if grade == "C" else "fail"
+            tracker.record_data_health(name, status, detail)
 
 
 def _detect_completed_stages(
@@ -36,6 +51,7 @@ def _detect_completed_stages(
     dqs = chunk.get("data_quality_summary", "")
     if dqs and tracker.stage_status("quality_gate") != "done":
         tracker.mark_stage_done("quality_gate", str(dqs))
+        _ingest_quality_gate_health(str(dqs), tracker)
 
     debate = chunk.get("investment_debate_state")
     if debate and isinstance(debate, dict):
