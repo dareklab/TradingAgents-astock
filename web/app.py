@@ -156,7 +156,7 @@ st.markdown(
 
 def _build_config() -> dict:
     config = DEFAULT_CONFIG.copy()
-    config["llm_provider"] = st.session_state.get("llm_provider", "minimax")
+    config["llm_provider"] = st.session_state.get("llm_provider", "deepseek")
     config["deep_think_llm"] = st.session_state.get("deep_think_llm", "MiniMax-M2.7")
     config["quick_think_llm"] = st.session_state.get("quick_think_llm", "MiniMax-M2.7-highspeed")
     # Optional third-party / proxy endpoint. Sidebar input wins, else .env BACKEND_URL.

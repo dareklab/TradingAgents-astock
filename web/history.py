@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
+
+# Beijing timezone (UTC+8)
+_CST = timezone(timedelta(hours=8))
 
 
 def _results_dir() -> Path:
@@ -31,9 +34,9 @@ def get_history() -> list[dict[str, str]]:
             continue
         date = match.group(1)
         ticker = log_file.parent.parent.name
-        # Use file modification time as the analysis timestamp
+        # Use file modification time as the analysis timestamp (UTC+8)
         mtime = os.path.getmtime(log_file)
-        time_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+        time_str = datetime.fromtimestamp(mtime, tz=_CST).strftime("%Y-%m-%d %H:%M:%S")
         entries.append({
             "ticker": ticker,
             "date": date,
