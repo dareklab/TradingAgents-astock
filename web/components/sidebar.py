@@ -163,17 +163,27 @@ def render_sidebar() -> None:
     st.markdown("---")
     st.markdown("#### 历史记录")
 
-    history = get_history()
+    with st.spinner("加载历史记录..."):
+        history = get_history()
+
     if not history:
         st.caption("暂无历史记录")
         return
 
-    for entry in history[:20]:
-        t, d, ts = entry["ticker"], entry["date"], entry["time"]
-        label = f"{get_stock_display_name(t)}  ·  {ts}"
-        if st.button(label, key=f"hist_{t}_{d}_{ts}", use_container_width=True):
-            st.session_state["viewing_history"] = entry["path"]
-            st.session_state["start_analysis"] = None
+    # Group by date
+    grouped = {}
+    for entry in history:
+        d = entry["date"]
+        grouped.setdefault(d, []).append(entry)
+
+    for date_str, entries in grouped.items():
+        with st.expander(f"📅 {date_str}（{len(entries)}）", expanded=False):
+            for entry in entries:
+                t, ts = entry["ticker"], entry["time"]
+                label = f"{get_stock_display_name(t)}  ·  {ts[-8:]}"  # HH:MM:SS
+                if st.button(label, key=f"hist_{t}_{entry['date']}_{ts}", use_container_width=True):
+                    st.session_state["viewing_history"] = entry["path"]
+                    st.session_state["start_analysis"] = None
 
     st.markdown("---")
     st.caption("⚠️ 仅供学习研究，不构成投资建议")
