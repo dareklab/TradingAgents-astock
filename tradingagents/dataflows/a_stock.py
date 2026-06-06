@@ -466,8 +466,42 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
     # Cache to disk
     df.to_csv(cache_file, index=False, encoding="utf-8")
 
-    # Filter by curr_date to prevent look-ahead bias
+    # ── Supplement: Tencent real-time quote ──────────────────────────
+    # When the data source (TDX) hasn't pushed the latest trading day's
+    # bar yet (common on weekends), use the Tencent real-time quote as a
+    # synthetic latest row so reports show the most recent closing price.
     cutoff = pd.to_datetime(curr_date)
+    latest_bar = df["Date"].max()
+    if latest_bar < cutoff:
+        try:
+            tq = _tencent_quote([code])
+            if code in tq:
+                price = tq[code]["price"]
+                prev_close = tq[code].get("last_close", price)
+                if price and price > 0:
+                    syn_date = cutoff  # use the analysis date
+                    syn_row = pd.DataFrame(
+                        [{
+                            "Date": syn_date,
+                            "Open": prev_close,
+                            "High": max(price, prev_close),
+                            "Low": min(price, prev_close),
+                            "Close": price,
+                            "Volume": 0,
+                        }]
+                    )
+                    df = pd.concat([df, syn_row], ignore_index=True)
+                    logger.info(
+                        "Appended Tencent quote for %s: price=%.2f "
+                        "(covers %s → %s)",
+                        code, price,
+                        latest_bar.strftime("%Y-%m-%d"),
+                        syn_date.strftime("%Y-%m-%d"),
+                    )
+        except Exception as e:
+            logger.debug("Tencent supplement failed for %s: %s", code, e)
+
+    # Filter by curr_date to prevent look-ahead bias
     return df[df["Date"] <= cutoff]
 
 
