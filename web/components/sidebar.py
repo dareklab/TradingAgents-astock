@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 from datetime import date
 
 import streamlit as st
@@ -9,7 +10,7 @@ import streamlit as st
 from tradingagents.dataflows.a_stock import get_stock_display_name
 from tradingagents.dataflows.trading_calendar import resolve_analysis_date
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
-from web.history import get_history
+from web.history import extract_signal, get_history
 
 # Provider display names in recommended order
 _PROVIDERS: list[tuple[str, str]] = [
@@ -187,7 +188,15 @@ def render_sidebar() -> None:
         with st.expander(f"📅 {date_str}（{len(entries)}）", expanded=False):
             for entry in entries:
                 t, ts = entry["ticker"], entry["time"]
-                label = f"{get_stock_display_name(t)}  ·  {ts[-8:]}"  # HH:MM:SS
+                # Extract trading signal from stored JSON
+                signal_str = ""
+                try:
+                    state = _json.load(open(entry["path"], encoding="utf-8"))
+                    s = extract_signal(state)
+                    signal_str = f" -【{s.upper()}】" if s != "N/A" else ""
+                except Exception:
+                    pass
+                label = f"{get_stock_display_name(t)} {signal_str} · {ts[-8:]}"
                 if st.button(label, key=f"hist_{t}_{entry['date']}_{ts}", use_container_width=True):
                     st.session_state["viewing_history"] = entry["path"]
                     st.session_state["start_analysis"] = None
