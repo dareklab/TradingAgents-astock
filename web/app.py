@@ -291,7 +291,7 @@ if viewing_history:
             ticker = Path(viewing_history).parent.parent.name
             trade_date = Path(viewing_history).stem.replace("full_states_log_", "")
             render_report(state, ticker, trade_date, signal)
-            st.toast("加载完成", icon="✅")
+            st.toast("加载完成", icon="✅", duration=2)
         except Exception as exc:
             st.error(f"渲染失败: {exc}")
     # ────────────────────────────────────────────────────────────────────────
