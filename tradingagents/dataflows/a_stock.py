@@ -182,6 +182,40 @@ def _get_mootdx_client():
     return _mootdx_client
 
 
+def _mootdx_bars_with_retry(symbol: str, category: int = 4, offset: int = 800,
+                            max_retries: int = 3) -> pd.DataFrame:
+    """Call mootdx client.bars with retry on transient TCP failures.
+
+    TDX TCP connections (port 7709) can fail intermittently from container
+    environments. Retry up to max_retries with increasing backoff before
+    giving up and letting the caller fall back to Sina HTTP.
+    """
+    last_exc = None
+    for attempt in range(max_retries):
+        try:
+            client = _get_mootdx_client()
+            df = client.bars(symbol=symbol, category=category, offset=offset)
+            if df is not None and not df.empty:
+                return df
+            last_exc = ValueError(f"No OHLCV data from mootdx for {symbol}")
+            logger.debug(
+                "mootdx bars empty for %s (attempt %d/%d)",
+                symbol, attempt + 1, max_retries,
+            )
+        except Exception as exc:
+            last_exc = exc
+            logger.debug(
+                "mootdx bars attempt %d/%d failed for %s: %s",
+                attempt + 1, max_retries, symbol, exc,
+            )
+
+        if attempt < max_retries - 1:
+            # Increasing backoff: 0.5s, 1.0s (doesn't fire on last iteration)
+            time.sleep(0.5 * (attempt + 1))
+
+    raise last_exc  # type: ignore[misc]
+
+
 # ---------------------------------------------------------------------------
 # Tencent Finance API
 # ---------------------------------------------------------------------------
@@ -432,11 +466,7 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
 
     # Fetch from mootdx — 800 daily bars (~3 years of trading days)
     try:
-        client = _get_mootdx_client()
-        df = client.bars(symbol=code, category=4, offset=800)
-
-        if df is None or df.empty:
-            raise ValueError(f"No OHLCV data from mootdx for {code}")
+        df = _mootdx_bars_with_retry(symbol=code, category=4, offset=800)
 
         # mootdx returns index named 'datetime' AND a column named 'datetime'
         # (plus year/month/day/hour/minute/volume). Drop duplicates before reset.
@@ -454,7 +484,7 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
         df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
         df["Date"] = pd.to_datetime(df["Date"])
     except Exception as e:
-        logger.warning("mootdx OHLCV failed for %s: %s, trying sina HTTP fallback", code, e)
+        logger.warning("mootdx OHLCV failed for %s after retries: %s, trying sina HTTP fallback", code, e)
         # Fallback: Sina direct HTTP API
         try:
             df = _sina_kline_fallback(code)
@@ -523,11 +553,7 @@ def get_stock_data(
 
     data_source = "mootdx (TCP)"
     try:
-        client = _get_mootdx_client()
-        df = client.bars(symbol=code, category=4, offset=800)
-
-        if df is None or df.empty:
-            raise ValueError(f"No data from mootdx for {code}")
+        df = _mootdx_bars_with_retry(symbol=code, category=4, offset=800)
 
         # Drop duplicate datetime column + extra columns before reset_index
         df = df.drop(
@@ -549,7 +575,7 @@ def get_stock_data(
         df["Date"] = pd.to_datetime(df["Date"])
 
     except Exception as e:
-        logger.warning("mootdx K-line failed for %s: %s, trying sina HTTP fallback", code, e)
+        logger.warning("mootdx K-line failed for %s after retries: %s, trying sina HTTP fallback", code, e)
         # Fallback: Sina direct HTTP API
         try:
             df = _sina_kline_fallback(code, start_date, end_date)

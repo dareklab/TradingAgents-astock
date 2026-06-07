@@ -239,7 +239,7 @@ tradingagents --help     # 查看所有选项
 
 内置 Streamlit 可视化界面，支持在侧边栏选择 LLM 供应商和模型，输入股票代码即可一键分析，适合不写代码的用户。
 
-### 启动
+### 本地启动
 
 ```bash
 # 方式一：命令行启动（推荐）
@@ -247,6 +247,23 @@ tradingagents-web
 
 # 方式二：直接运行
 streamlit run web/app.py
+```
+
+### Docker容器启动
+```bash
+# 启动 Web
+docker compose up web -d
+
+# 重新构建
+docker compose build web
+
+# 查看日志
+docker compose logs web -f
+
+# 重启/停止
+docker compose restart web
+docker compose stop web
+
 ```
 
 打开浏览器访问 `http://localhost:8501`。
