@@ -226,6 +226,10 @@ if start_req:
 tracker: ProgressTracker | None = st.session_state.get("tracker")
 viewing_history: str | None = st.session_state.get("viewing_history")
 
+# ── Clear old content when switching history records ──────────────────────
+if st.session_state.pop("_hist_clear", False):
+    st.rerun()
+
 # State 1: Viewing a historical analysis
 if viewing_history:
     # ── Two-phase loading: CSS spinner (Phase 1) → load data (Phase 2) ────
@@ -236,32 +240,28 @@ if viewing_history:
     _phase_key = f"_hld_phase_{viewing_history}"
     _phase = st.session_state.get(_phase_key, 0)
 
-    # CSS keyframes (rendered in every phase so they survive element cleanup)
-    st.markdown(
-        """<style>
-        @keyframes hldSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-        @keyframes hldPulse{0%,100%{opacity:1}50%{opacity:.3}}
-        .hld-ring{width:56px;height:56px;border:4px solid #1e1e1e;
-          border-top-color:#ff5a1f;border-radius:50%;
-          animation:hldSpin .8s linear infinite;margin:0 auto 22px auto;}
-        .hld-title{text-align:center;font-size:1.2rem;font-weight:700;
-          color:#f5f1eb;margin-bottom:6px;}
-        .hld-sub{text-align:center;font-size:.85rem;color:#666;
-          animation:hldPulse 2s ease-in-out infinite;}
-        </style>""",
-        unsafe_allow_html=True,
-    )
-
     if _phase == 0:
-        # Phase 1 — push loading UI to the browser
-        st.markdown(
-            """<div style="display:flex;align-items:center;justify-content:center;
-            min-height:60vh;flex-direction:column;">
-              <div><div class="hld-ring"></div>
-              <div class="hld-title">正在加载历史报告…</div>
-              <div class="hld-sub">数据解析中，请稍候</div></div>
-            </div>""",
-            unsafe_allow_html=True,
+        # Phase 1 — push the loading screen to the browser.
+        for _ in range(30):
+            st.empty()
+        st.html(
+            "<style>"
+            "@keyframes hldSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}"
+            "@keyframes hldPulse{0%,100%{opacity:1}50%{opacity:.3}}"
+            ".hld-ring{width:56px;height:56px;border:4px solid #1e1e1e;"
+            "border-top-color:#ff5a1f;border-radius:50%;"
+            "animation:hldSpin .8s linear infinite;margin:0 auto 22px auto;}"
+            ".hld-title{text-align:center;font-size:1.2rem;font-weight:700;"
+            "color:#f5f1eb;margin-bottom:6px;}"
+            ".hld-sub{text-align:center;font-size:.85rem;color:#666;"
+            "animation:hldPulse 2s ease-in-out infinite;}"
+            "</style>"
+            "<div style='display:flex;align-items:center;justify-content:center;"
+            "min-height:60vh;flex-direction:column;'>"
+            "<div><div class='hld-ring'></div>"
+            "<div class='hld-title'>正在加载历史报告…</div>"
+            "<div class='hld-sub'>数据解析中，请稍候</div></div>"
+            "</div>"
         )
         st.session_state[_phase_key] = 1
         st.session_state["_hld_start"] = time.time()

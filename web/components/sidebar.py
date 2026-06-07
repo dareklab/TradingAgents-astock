@@ -183,6 +183,8 @@ def render_sidebar() -> None:
                 if st.button(label, key=f"hist_{t}_{entry['date']}_{ts}", use_container_width=True):
                     st.session_state["viewing_history"] = entry["path"]
                     st.session_state["start_analysis"] = None
+                    st.session_state["_hist_clear"] = True
+                    st.rerun()
 
     st.markdown("---")
     st.caption("⚠️ 仅供学习研究，不构成投资建议")
