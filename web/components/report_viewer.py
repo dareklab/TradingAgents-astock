@@ -79,35 +79,23 @@ def render_report(
 
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
 
-    # Markdown export always works (no font dependency); PDF is generated
-    # lazily and guarded so a PDF/font failure never crashes the results page.
-    col_md, col_pdf, col_spacer = st.columns([1, 1, 2])
-    with col_md:
-        md_text = generate_markdown(final_state, ticker, trade_date, signal)
-        st.download_button(
-            "📥 下载 Markdown",
-            data=md_text.encode("utf-8"),
-            file_name=f"{display_name}-{date_compact}.md",
-            mime="text/markdown",
-            use_container_width=True,
-        )
-    with col_pdf:
+    # Download buttons — use st.link_button as a diagnostic first
+    md_text = generate_markdown(final_state, ticker, trade_date, signal)
+    import base64 as _b64
+
+    col1, col2, col3 = st.columns([0.6, 0.6, 4])
+    with col1:
+        b64 = _b64.b64encode(md_text.encode("utf-8")).decode()
+        href = f"data:text/markdown;base64,{b64}"
+        st.link_button("下载 MD", url=href, help="下载 Markdown 报告")
+    with col2:
         try:
             pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
-            st.download_button(
-                "📄 下载 PDF",
-                data=pdf_bytes,
-                file_name=f"{display_name}-{date_compact}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        except Exception as exc:  # noqa: BLE001 — never let PDF crash the page
-            st.button(
-                "📄 PDF 不可用",
-                disabled=True,
-                use_container_width=True,
-                help=f"PDF 生成失败，请改用 Markdown 导出。原因：{exc}",
-            )
+            b64 = _b64.b64encode(pdf_bytes).decode()
+            href = f"data:application/pdf;base64,{b64}"
+            st.link_button("下载 PDF", url=href, help="下载 PDF 报告")
+        except Exception:
+            pass
 
     st.markdown("---")
 
