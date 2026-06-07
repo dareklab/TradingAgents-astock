@@ -183,7 +183,7 @@ class _ReportPDF(FPDF):
 
         self._use_font("", 14)
         self.set_text_color(100, 100, 100)
-        self.cell(0, 10, f"分析日期: {self.trade_date}", align="C")
+        self.cell(0, 10, f"数据日期: {self.trade_date}", align="C")
         self.ln(8)
         self.cell(0, 10, f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}", align="C")
         self.ln(20)
@@ -395,7 +395,7 @@ def generate_markdown(final_state: dict[str, Any], ticker: str, trade_date: str,
         f"# {display_name}-{date_compact}",
         "",
         f"- **股票代码**：{ticker}",
-        f"- **分析日期**：{trade_date}",
+        f"- **数据日期**：{trade_date}",
         f"- **生成时间**：{datetime.now().strftime('%Y-%m-%d %H:%M')}",
         f"- **交易信号**：**{signal.upper()}**",
         "",

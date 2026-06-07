@@ -127,7 +127,7 @@ def render_sidebar() -> None:
     )
 
     trade_date = st.date_input(
-        "分析日期",
+        "数据日期",
         value=date.today(),
         key="input_date",
     )

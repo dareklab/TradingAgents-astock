@@ -199,7 +199,7 @@ if start_req:
                 正在初始化 {start_req['ticker']} 的分析...
             </div>
             <div style="font-size:0.9rem; color:#888; margin-top:0.5rem;">
-                分析日期: {start_req['trade_date']}
+                数据日期: {start_req['trade_date']}
             </div>
         </div>
         """,
