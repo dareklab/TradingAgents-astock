@@ -16,10 +16,11 @@ def _strip_think(text: str) -> str:
 
 
 def _signal_style(signal: str) -> tuple[str, str]:
+    """Map a 5-tier or 3-tier rating to (colour, Chinese label)."""
     s = signal.upper()
-    if "BUY" in s:
+    if "BUY" in s or "OVERWEIGHT" in s:
         return "#22c55e", "买入"
-    if "SELL" in s:
+    if "SELL" in s or "UNDERWEIGHT" in s:
         return "#ef4444", "卖出"
     return "#fbbf24", "持有"
 
