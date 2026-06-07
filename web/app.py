@@ -189,22 +189,20 @@ if start_req:
     # Explicitly clear old display state to prevent flash of previous results
     st.session_state.pop("tracker", None)
     st.session_state.pop("viewing_history", None)
+    st.session_state.pop("_hist_cleared", None)
+
+    # Clear stale report content before showing the init placeholder
+    for _ in range(30):
+        st.empty()
 
     # Show placeholder immediately so old content never renders
-    placeholder = st.empty()
-    placeholder.markdown(
-        f"""
-        <div style="text-align:center; padding:4rem 2rem;">
-            <div style="font-size:2rem; margin-bottom:1rem;">⏳</div>
-            <div style="font-size:1.2rem; color:#f5f1eb;">
-                正在初始化 {start_req['ticker']} 的分析...
-            </div>
-            <div style="font-size:0.9rem; color:#888; margin-top:0.5rem;">
-                数据日期: {start_req['trade_date']}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.html(
+        f"""<div style="text-align:center;padding:4rem 2rem;">
+        <div style="font-size:2rem;margin-bottom:1rem;">⏳</div>
+        <div style="font-size:1.2rem;color:#f5f1eb;">
+        正在初始化 {start_req['ticker']} 的分析...</div>
+        <div style="font-size:0.9rem;color:#888;margin-top:0.5rem;">
+        数据日期: {start_req['trade_date']}</div></div>"""
     )
 
     tracker = ProgressTracker(

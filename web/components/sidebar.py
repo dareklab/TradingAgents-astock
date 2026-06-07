@@ -138,27 +138,28 @@ def render_sidebar() -> None:
     tracker = st.session_state.get("tracker")
     is_busy = tracker is not None and tracker.is_running
 
-    if st.button(
-        "开始分析" if not is_busy else "分析进行中...",
-        use_container_width=True,
-        disabled=is_busy or not ticker,
-        type="primary",
-    ):
-        resolved_code, err = _resolve_user_input(ticker)
-        if err:
-            st.error(f"❌ {err}")
-        else:
-            if resolved_code != ticker.strip():
-                st.success(f"✅ {ticker.strip()} → {resolved_code}")
-            raw_date = trade_date.strftime("%Y-%m-%d")
-            resolved_date = resolve_analysis_date(raw_date)
-            if resolved_date != raw_date:
-                st.info(f"📅 {raw_date} 非交易日，已自动使用最近交易日 {resolved_date}")
-            st.session_state["start_analysis"] = {
-                "ticker": resolved_code,
-                "trade_date": resolved_date,
-            }
-            st.session_state["viewing_history"] = None
+    if not is_busy:
+        if st.button("开始分析", use_container_width=True,
+                     disabled=not ticker, type="primary"):
+            resolved_code, err = _resolve_user_input(ticker)
+            if err:
+                st.error(f"❌ {err}")
+            else:
+                if resolved_code != ticker.strip():
+                    st.success(f"✅ {ticker.strip()} → {resolved_code}")
+                raw_date = trade_date.strftime("%Y-%m-%d")
+                resolved_date = resolve_analysis_date(raw_date)
+                if resolved_date != raw_date:
+                    st.info(f"📅 {raw_date} 非交易日，已自动使用最近交易日 {resolved_date}")
+                st.session_state["start_analysis"] = {
+                    "ticker": resolved_code,
+                    "trade_date": resolved_date,
+                }
+                st.session_state["viewing_history"] = None
+    else:
+        if st.button("⏹ 停止分析", use_container_width=True, type="secondary"):
+            tracker.request_stop()
+            st.rerun()
 
     st.markdown("---")
     st.markdown("#### 历史记录")

@@ -42,6 +42,7 @@ def render_report(
     trade_date: str,
     signal: str,
     elapsed: float | None = None,
+    show_downloads: bool = True,
 ) -> None:
     """Render the full analysis report."""
 
@@ -79,34 +80,35 @@ def render_report(
 
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
 
-    # Download buttons — side by side
-    md_text = generate_markdown(final_state, ticker, trade_date, signal)
+    # Download buttons — only in history mode, not during live analysis
+    if show_downloads:
+        md_text = generate_markdown(final_state, ticker, trade_date, signal)
 
-    c1, c2, c3 = st.columns([2.5, 2, 10], gap="small")
-    with c1:
-        st.download_button(
-            label="下载Markdown报告",
-            data=md_text.encode("utf-8"),
-            file_name=f"{display_name}-{date_compact}.md",
-            mime="text/markdown",
-            type="secondary",
-            use_container_width=True,
-            key=f"md_{ticker}_{date_compact}",
-        )
-    with c2:
-        try:
-            pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
+        c1, c2, c3 = st.columns([2.5, 2, 10], gap="small")
+        with c1:
             st.download_button(
-                label="下载PDF报告",
-                data=pdf_bytes,
-                file_name=f"{display_name}-{date_compact}.pdf",
-                mime="application/pdf",
+                label="下载Markdown报告",
+                data=md_text.encode("utf-8"),
+                file_name=f"{display_name}-{date_compact}.md",
+                mime="text/markdown",
                 type="secondary",
                 use_container_width=True,
-                key=f"pdf_{ticker}_{date_compact}",
+                key=f"md_{ticker}_{date_compact}",
             )
-        except Exception:
-            pass
+        with c2:
+            try:
+                pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
+                st.download_button(
+                    label="下载PDF报告",
+                    data=pdf_bytes,
+                    file_name=f"{display_name}-{date_compact}.pdf",
+                    mime="application/pdf",
+                    type="secondary",
+                    use_container_width=True,
+                    key=f"pdf_{ticker}_{date_compact}",
+                )
+            except Exception:
+                pass
 
     st.markdown("---")
 
