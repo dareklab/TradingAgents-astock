@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import time
@@ -9,6 +10,8 @@ from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
+
+_log = logging.getLogger("web.app")
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
@@ -228,42 +231,46 @@ viewing_history: str | None = st.session_state.get("viewing_history")
 
 # State 1: Viewing a historical analysis
 if viewing_history:
-    # ── Two-phase loading: show overlay → load data → render report ────────
-    # Streamlit only pushes DOM updates when a script run finishes, so the
-    # loading indicator must be rendered on a *previous* run.  We use
-    # CSS animations (keyframes) which run continuously in the browser,
-    # surviving across runs until the next run's DOM replaces them.
-    _loading_key = f"_hist_load_{id(viewing_history)}"
-    if not st.session_state.get(_loading_key):
-        # Phase 1 — push the loading screen to the browser immediately
+    # ── Two-phase loading: CSS spinner (Phase 1) → load data (Phase 2) ────
+    # Streamlit only sends DOM updates when a script run finishes, so the
+    # loading indicator must be rendered on a *previous* run via st.rerun().
+    # Phase 1's CSS animation (keyframes) runs continuously in the browser
+    # while Phase 2 blocks on load_analysis().
+    _phase_key = f"_hld_phase_{viewing_history}"
+    _phase = st.session_state.get(_phase_key, 0)
+
+    # CSS keyframes (rendered in every phase so they survive element cleanup)
+    st.markdown(
+        """<style>
+        @keyframes hldSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        @keyframes hldPulse{0%,100%{opacity:1}50%{opacity:.3}}
+        .hld-ring{width:56px;height:56px;border:4px solid #1e1e1e;
+          border-top-color:#ff5a1f;border-radius:50%;
+          animation:hldSpin .8s linear infinite;margin:0 auto 22px auto;}
+        .hld-title{text-align:center;font-size:1.2rem;font-weight:700;
+          color:#f5f1eb;margin-bottom:6px;}
+        .hld-sub{text-align:center;font-size:.85rem;color:#666;
+          animation:hldPulse 2s ease-in-out infinite;}
+        </style>""",
+        unsafe_allow_html=True,
+    )
+
+    if _phase == 0:
+        # Phase 1 — push the loading screen to the browser
         st.markdown(
-            """<style>
-            @keyframes hspin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-            @keyframes hpulse{0%,100%{opacity:1}50%{opacity:.35}}
-            .hld-wrap{display:flex;align-items:center;justify-content:center;
-              min-height:70vh;flex-direction:column;}
-            .hld-ring{width:56px;height:56px;border:4px solid #1e1e1e;
-              border-top-color:#ff5a1f;border-radius:50%;
-              animation:hspin .8s linear infinite;margin-bottom:22px;}
-            .hld-title{font-size:1.2rem;font-weight:700;color:#f5f1eb;
-              margin-bottom:6px;}
-            .hld-sub{font-size:.85rem;color:#666;animation:hpulse 2s ease-in-out infinite;}
-            </style>
-            <div class="hld-wrap">
-              <div class="hld-ring"></div>
+            """<div style="display:flex;align-items:center;justify-content:center;
+            min-height:60vh;flex-direction:column;">
+              <div><div class="hld-ring"></div>
               <div class="hld-title">正在加载历史报告…</div>
-              <div class="hld-sub">数据解析中，请稍候</div>
+              <div class="hld-sub">数据解析中，请稍候</div></div>
             </div>""",
             unsafe_allow_html=True,
         )
-        st.session_state[_loading_key] = True
+        st.session_state[_phase_key] = 1
         st.session_state["_hld_start"] = time.time()
-        # Brief pause ensures Phase 1's WebSocket message reaches the
-        # browser before the server starts Phase 2.
-        time.sleep(0.3)
         st.rerun()
 
-    # Phase 2 — load data (browser still shows Phase 1's CSS animation)
+    # Phase 2 — load data while Phase 1's spinner runs in the browser
     _start = st.session_state.pop("_hld_start", time.time())
     _load_err = None
     try:
@@ -271,11 +278,12 @@ if viewing_history:
     except Exception as _exc:
         _load_err = _exc
 
+    # Minimum 2-second display
     _elapsed = time.time() - _start
     if _elapsed < 2.0:
         time.sleep(2.0 - _elapsed)
 
-    st.session_state.pop(_loading_key, None)
+    st.session_state.pop(_phase_key, None)
 
     if _load_err is not None:
         st.error(f"加载失败: {_load_err}")

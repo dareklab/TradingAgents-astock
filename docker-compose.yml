@@ -21,7 +21,7 @@ services:
     volumes:
       - .:/home/appuser/app
       - ~/.tradingagents:/home/appuser/.tradingagents
-    entrypoint: [ "tradingagents-web" ]
+    entrypoint: [ "streamlit", "run", "/home/appuser/app/web/app.py" ]
     command: [ ]
     tty: true
     stdin_open: true
