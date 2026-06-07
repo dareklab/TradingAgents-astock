@@ -1,15 +1,54 @@
+# Git
 .git
-.venv
-.env
-.claude
-.idea
-.vscode
-.DS_Store
+.gitignore
+.gitattributes
+
+# Python
 __pycache__
+*.py[cod]
 *.egg-info
-build
-dist
-results
-eval_results
+*.egg
+.eggs
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+tests/
+test_*.py
+
+# Issues archive
+issues/
+
+# GitHub
+.github/
+
+# Virtual env
+venv/
+.venv/
+
+# Docker
 Dockerfile
+.dockerignore
 docker-compose.yml
+
+# Streamlit cache
+.streamlit/secrets.toml
+
+# Logs
+logs/
+*.log
+
+# Data
+data/
+*.db
+*.sqlite
