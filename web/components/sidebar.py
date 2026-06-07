@@ -196,7 +196,7 @@ def render_sidebar() -> None:
                     signal_str = f" -【{s.upper()}】" if s != "N/A" else ""
                 except Exception:
                     pass
-                label = f"{get_stock_display_name(t)} {signal_str} · {ts[-8:]}"
+                label = f"{get_stock_display_name(t)} {signal_str} {ts[-8:-3]}"
                 if st.button(label, key=f"hist_{t}_{entry['date']}_{ts}", use_container_width=True):
                     st.session_state["viewing_history"] = entry["path"]
                     st.session_state["start_analysis"] = None
