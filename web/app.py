@@ -101,17 +101,22 @@ st.markdown(
         box-shadow: 0 6px 20px rgba(255,90,31,0.4) !important;
         transform: translateY(-1px) !important;
     }
-    /* Secondary buttons (history items) */
+    /* Secondary buttons (history items + download buttons) */
     button[kind="secondary"] {
         background: #161616 !important;
         border: 1px solid #2a2a2a !important;
         color: #ccc !important;
-        transition: all 0.2s ease !important;
+        transition: all 0.15s ease !important;
     }
     button[kind="secondary"]:hover {
         background: #1e1e1e !important;
         border-color: #ff5a1f !important;
         color: #ff5a1f !important;
+    }
+    button[kind="secondary"]:active {
+        background: #ff5a1f !important;
+        color: #fff !important;
+        transform: scale(0.97) !important;
     }
     .stExpander {
         border: 1px solid #222 !important;

@@ -79,23 +79,52 @@ def render_report(
 
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
 
-    # Download buttons — secondary style matching history buttons
+    # Download buttons — custom HTML via st.components to avoid Streamlit rerun
     md_text = generate_markdown(final_state, ticker, trade_date, signal)
     import base64 as _b64
 
-    c1, c2, c3 = st.columns([2.2, 2, 10])
-    with c1:
-        b64 = _b64.b64encode(md_text.encode("utf-8")).decode()
-        st.link_button("下载Markdown报告", type="secondary",
-                       url=f"data:text/markdown;base64,{b64}")
-    with c2:
-        try:
-            pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
-            b64 = _b64.b64encode(pdf_bytes).decode()
-            st.link_button("下载PDF报告", type="secondary",
-                           url=f"data:application/pdf;base64,{b64}")
-        except Exception:
-            pass
+    _md_b64 = _b64.b64encode(md_text.encode("utf-8")).decode()
+    _md_name = f"{display_name}-{date_compact}.md"
+
+    _pdf_data, _pdf_name = "", ""
+    try:
+        pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
+        _pdf_data = _b64.b64encode(pdf_bytes).decode()
+        _pdf_name = f"{display_name}-{date_compact}.pdf"
+    except Exception:
+        pass
+
+    st.components.v1.html(f"""
+    <style>
+    body{{margin:0;padding:4px 0;overflow:visible;}}
+    .dl-btn{{display:inline-flex;align-items:center;
+      background:#161616;border:1px solid #2a2a2a;border-radius:8px;
+      color:#ccc;font-size:.85rem;padding:6px 14px;cursor:pointer;
+      font-family:Inter,-apple-system,sans-serif;
+      transition:all .15s ease;text-decoration:none;margin-right:8px;
+      line-height:1.4;}}
+    .dl-btn:hover{{background:#1e1e1e;border-color:#ff5a1f;color:#ff5a1f;}}
+    .dl-btn:active{{background:#ff5a1f;color:#fff;transform:scale(.97);}}
+    .dl-btn.disabled{{opacity:.35;cursor:not-allowed;}}
+    .dl-btn.disabled:hover{{background:#161616;border-color:#2a2a2a;color:#ccc;}}
+    </style>
+    <a class="dl-btn" onclick="download('{_md_b64}','{_md_name}','text/markdown')">下载Markdown报告</a>
+    <a class="dl-btn {'disabled' if not _pdf_data else ''}"
+       {"onclick=download('"+_pdf_data+"','"+_pdf_name+"','application/pdf')" if _pdf_data else ""}>下载PDF报告</a>
+    <script>
+    function download(b64, name, mime){{
+      const b = atob(b64), a = new Uint8Array(b.length);
+      for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i);
+      const blob = new Blob([a], {{type: mime}});
+      const url = URL.createObjectURL(blob);
+      const el = document.createElement('a');
+      el.href = url; el.download = name;
+      document.body.appendChild(el); el.click();
+      document.body.removeChild(el);
+      URL.revokeObjectURL(url);
+    }}
+    </script>
+    """, height=60)
 
     st.markdown("---")
 
