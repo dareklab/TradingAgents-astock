@@ -79,21 +79,21 @@ def render_report(
 
     st.caption("⚠️ 本报告由 AI 自动生成，仅供学习研究，不构成投资建议。")
 
-    # Download buttons — use st.link_button as a diagnostic first
+    # Download buttons — secondary style matching history buttons
     md_text = generate_markdown(final_state, ticker, trade_date, signal)
     import base64 as _b64
 
-    col1, col2, col3 = st.columns([0.6, 0.6, 4])
-    with col1:
+    c1, c2, c3 = st.columns([2.2, 2, 10])
+    with c1:
         b64 = _b64.b64encode(md_text.encode("utf-8")).decode()
-        href = f"data:text/markdown;base64,{b64}"
-        st.link_button("下载 MD", url=href, help="下载 Markdown 报告")
-    with col2:
+        st.link_button("下载Markdown报告", type="secondary",
+                       url=f"data:text/markdown;base64,{b64}")
+    with c2:
         try:
             pdf_bytes = generate_pdf(final_state, ticker, trade_date, signal)
             b64 = _b64.b64encode(pdf_bytes).decode()
-            href = f"data:application/pdf;base64,{b64}"
-            st.link_button("下载 PDF", url=href, help="下载 PDF 报告")
+            st.link_button("下载PDF报告", type="secondary",
+                           url=f"data:application/pdf;base64,{b64}")
         except Exception:
             pass
 

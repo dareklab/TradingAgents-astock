@@ -59,47 +59,31 @@ def load_analysis(path: str) -> dict[str, Any]:
 def extract_signal(state: dict[str, Any]) -> str:
     """Extract the short signal (Buy/Sell/Hold) from a final state dict.
 
-    Prioritises the most authoritative field (final_trade_decision), then
-    falls back to earlier ones.  Chinese verdict keywords (买入/增持/卖出/
-    减持/持有) are checked *before* English keywords because debate
-    transcripts often contain "BUY" / "SELL" in argument text while the
-    actual conclusion is in Chinese.  For Chinese we use the *last*
-    occurrence since debate transcripts discuss both sides before a verdict.
-    """
-    import re
+    Uses the shared 5-tier rating parser first (understands explicit rating
+    labels like ``评级：Sell`` / ``**Rating**: Overweight``), then falls
+    back to keyword search on the most authoritative fields.
 
-    cn_map = {
-        "买入": "Buy", "增持": "Buy",
-        "卖出": "Sell", "减持": "Sell",
-        "持有": "Hold",
+    Returns one of ``Buy`` / ``Sell`` / ``Hold``.
+    """
+    from tradingagents.agents.utils.rating import parse_rating
+
+    # 5→3 tier mapping
+    _FIVE_TO_THREE = {
+        "Buy": "Buy", "Overweight": "Buy",
+        "Sell": "Sell", "Underweight": "Sell",
+        "Hold": "Hold",
     }
 
-    # Most authoritative field first
     for field in (
-        "final_trade_decision",
-        "trader_investment_decision",
         "investment_plan",
+        "trader_investment_decision",
+        "final_trade_decision",
     ):
         text = state.get(field, "")
         if not text:
             continue
-        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-
-        # 1) Chinese verdict — last occurrence = final conclusion
-        best_pos = -1
-        best_signal = None
-        for cn, en in cn_map.items():
-            pos = cleaned.rfind(cn)
-            if pos > best_pos:
-                best_pos = pos
-                best_signal = en
-        if best_signal:
-            return best_signal
-
-        # 2) English keywords — fallback only
-        upper = cleaned.upper()
-        for keyword in ("BUY", "SELL", "HOLD"):
-            if keyword in upper:
-                return keyword.capitalize()
+        rating = parse_rating(text)
+        if rating in _FIVE_TO_THREE:
+            return _FIVE_TO_THREE[rating]
 
     return "N/A"

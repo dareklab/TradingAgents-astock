@@ -27,7 +27,9 @@ _RATING_LABEL_RE = re.compile(r"rating.*?[:\-][\s*]*(\w+)", re.IGNORECASE)
 # Chinese rating labels: "评级：卖出" / "最终评级：**卖出**" etc.
 _CN_RATING_MAP = {"买入": "Buy", "增持": "Overweight", "持有": "Hold",
                   "减持": "Underweight", "卖出": "Sell"}
-_CN_RATING_LABEL_RE = re.compile(r"(?:评级|最终评级|评级为)[：:]\s*\**\s*(\S+?)\s*\**")
+_CN_RATING_LABEL_RE = re.compile(
+    r"(?:评级|最终评级|评级为)[：:]\s*\**\s*([^*\s]+)\**"
+)
 
 
 def parse_rating(text: str, default: str = "Hold") -> str:
@@ -51,9 +53,12 @@ def parse_rating(text: str, default: str = "Hold") -> str:
     for line in text.splitlines():
         m = _CN_RATING_LABEL_RE.search(line)
         if m:
-            cn_word = m.group(1).rstrip("*").strip()
+            cn_word = m.group(1).strip()
             if cn_word in _CN_RATING_MAP:
                 return _CN_RATING_MAP[cn_word]
+            # PM often writes "评级：Sell" (Chinese label + English word)
+            if cn_word.lower() in _RATING_SET:
+                return cn_word.capitalize()
 
     # 3) Fallback: last occurrence of any rating word (verdict comes last)
     text_lower = text.lower()
