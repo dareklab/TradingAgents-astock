@@ -69,7 +69,7 @@ def render_report(
                 {signal.upper()}
             </div>
             <div style="font-size:1.2rem; color:#f5f1eb;">
-                {display_name} · {trade_date}
+                {display_name} · 交易数据截止日期 {trade_date}
             </div>
             {stats_html}
         </div>
