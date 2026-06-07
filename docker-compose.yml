@@ -1,5 +1,5 @@
 services:
-  tradingagents-astock:
+  web:
     build: .
     image: tradingagents-astock:latest
     ports:
@@ -15,6 +15,3 @@ services:
     command: [ ]
     tty: true
     stdin_open: true
-
-volumes:
-  ollama_data:
