@@ -24,11 +24,11 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install CJK font (cached permanently — no dependency on builder)
+# Install CJK + emoji fonts (cached permanently — no dependency on builder)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
-    apt-get install -y --no-install-recommends fonts-wqy-microhei && \
+    apt-get install -y --no-install-recommends fonts-wqy-microhei fonts-noto-color-emoji && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv

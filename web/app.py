@@ -228,59 +228,67 @@ viewing_history: str | None = st.session_state.get("viewing_history")
 
 # State 1: Viewing a historical analysis
 if viewing_history:
-    # ── Two-phase: show overlay → load data → render report ────────────────
-    _loading_key = f"_hist_loading_{viewing_history}"
+    # ── Two-phase loading: show overlay → load data → render report ────────
+    # Streamlit only pushes DOM updates when a script run finishes, so the
+    # loading indicator must be rendered on a *previous* run.  We use
+    # CSS animations (keyframes) which run continuously in the browser,
+    # surviving across runs until the next run's DOM replaces them.
+    _loading_key = f"_hist_load_{id(viewing_history)}"
     if not st.session_state.get(_loading_key):
-        # Phase 1: render the loading UI so the browser shows it immediately
-        print(f"[hist-load] Phase 1 — rendering overlay for {viewing_history[-40:]}", flush=True)
+        # Phase 1 — push the loading screen to the browser immediately
         st.markdown(
-            """<div style="display:flex;align-items:center;justify-content:center;
-            min-height:70vh;flex-direction:column;">
-            <div style="font-size:3rem;margin-bottom:1.5rem;">⏳</div>
-            <div style="font-size:1.3rem;font-weight:700;color:#f5f1eb;
-            margin-bottom:0.5rem;">正在加载历史报告…</div>
-            <div style="color:#666;font-size:0.9rem;">数据解析中，请稍候</div>
+            """<style>
+            @keyframes hspin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+            @keyframes hpulse{0%,100%{opacity:1}50%{opacity:.35}}
+            .hld-wrap{display:flex;align-items:center;justify-content:center;
+              min-height:70vh;flex-direction:column;}
+            .hld-ring{width:56px;height:56px;border:4px solid #1e1e1e;
+              border-top-color:#ff5a1f;border-radius:50%;
+              animation:hspin .8s linear infinite;margin-bottom:22px;}
+            .hld-title{font-size:1.2rem;font-weight:700;color:#f5f1eb;
+              margin-bottom:6px;}
+            .hld-sub{font-size:.85rem;color:#666;animation:hpulse 2s ease-in-out infinite;}
+            </style>
+            <div class="hld-wrap">
+              <div class="hld-ring"></div>
+              <div class="hld-title">正在加载历史报告…</div>
+              <div class="hld-sub">数据解析中，请稍候</div>
             </div>""",
             unsafe_allow_html=True,
         )
         st.session_state[_loading_key] = True
-        st.session_state["_hist_start_ts"] = time.time()
-        print(f"[hist-load] Phase 1 — triggering rerun", flush=True)
+        st.session_state["_hld_start"] = time.time()
+        # Brief pause ensures Phase 1's WebSocket message reaches the
+        # browser before the server starts Phase 2.
+        time.sleep(0.3)
         st.rerun()
 
-    # Phase 2: do the work while Phase 1's UI is still in the browser
-    print(f"[hist-load] Phase 2 — loading data for {viewing_history[-40:]}", flush=True)
-    _start_ts = st.session_state.get("_hist_start_ts", time.time())
+    # Phase 2 — load data (browser still shows Phase 1's CSS animation)
+    _start = st.session_state.pop("_hld_start", time.time())
     _load_err = None
     try:
         state = load_analysis(viewing_history)
-        signal = extract_signal(state)
-        print(f"[hist-load] Phase 2 — data loaded ({time.time() - _start_ts:.1f}s)", flush=True)
     except Exception as _exc:
         _load_err = _exc
-        print(f"[hist-load] Phase 2 — FAILED: {_exc}", flush=True)
 
-    # Minimum 2 s display
-    _elapsed = time.time() - _start_ts
+    _elapsed = time.time() - _start
     if _elapsed < 2.0:
-        print(f"[hist-load] Phase 2 — sleeping {2.0 - _elapsed:.1f}s for min display", flush=True)
         time.sleep(2.0 - _elapsed)
 
     st.session_state.pop(_loading_key, None)
-    st.session_state.pop("_hist_start_ts", None)
 
     if _load_err is not None:
         st.error(f"加载失败: {_load_err}")
     else:
+        signal = extract_signal(state)
         try:
             ticker = Path(viewing_history).parent.parent.name
             trade_date = Path(viewing_history).stem.replace("full_states_log_", "")
-            print(f"[hist-load] Phase 2 — rendering report for {ticker} {trade_date}", flush=True)
             render_report(state, ticker, trade_date, signal)
-            st.toast("历史报告加载完成", icon="✅")
+            st.toast("加载完成", icon="✅")
         except Exception as exc:
-            st.error(f"加载失败: {exc}")
-    # ──────────────────────────────────────────────────────────────────────────
+            st.error(f"渲染失败: {exc}")
+    # ────────────────────────────────────────────────────────────────────────
 
 # State 2: Analysis running
 elif tracker and tracker.is_running:
