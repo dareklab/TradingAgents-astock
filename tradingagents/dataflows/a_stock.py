@@ -141,6 +141,17 @@ def resolve_ticker(user_input: str) -> str:
     if len(matches) == 1:
         return next(iter(matches.values()))
     if len(matches) > 1:
+        # Heuristic: prefer individual stocks over indices.
+        # Index codes: 399xxx, 000xxx-004xxx, 880xxx, 9xx etc.
+        # Stock codes: 600xxx, 000xxx, 002xxx, 300xxx, 688xxx, 8xxxxx etc.
+        _is_index = lambda c: (
+            c.startswith("399") or c.startswith("88")
+            or (c.startswith("0") and c[1] in "01234" and len(c) == 6)
+        )
+        stocks = {n: c for n, c in matches.items() if not _is_index(c)}
+        if len(stocks) == 1:
+            return next(iter(stocks.values()))
+        # Still ambiguous — give the LLM a clear error
         examples = ", ".join(f"{n}({c})" for n, c in list(matches.items())[:5])
         raise ValueError(f"'{s}' 匹配到多只股票: {examples}，请输入完整名称或代码")
 
