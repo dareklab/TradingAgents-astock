@@ -34,6 +34,15 @@ from .utils import safe_ticker_component
 
 logger = logging.getLogger(__name__)
 
+# CSRC industry code → name (mootdx finance returns numeric codes)
+_INDUSTRY_NAMES: dict[int, str] = {
+    1: "农林牧渔", 2: "采矿业", 3: "制造业", 4: "电力热力燃气",
+    5: "建筑业", 6: "批发零售", 7: "交通运输", 8: "住宿餐饮",
+    9: "信息技术", 10: "金融业", 11: "房地产业", 12: "租赁商务",
+    13: "科研技术", 14: "水利环境", 15: "居民服务", 16: "教育",
+    17: "卫生社会", 18: "文体娱乐", 19: "综合", 20: "其他",
+    21: "建筑业", 22: "信息技术", 23: "交通运输",
+}
 
 # ---------------------------------------------------------------------------
 # Helpers: ticker format & market detection
@@ -767,7 +776,6 @@ def get_fundamentals(
 
                 # Direct fields (pinyin column names)
                 direct_fields = {
-                    "industry": "行业",
                     "meigujingzichan": "每股净资产 (BVPS)",
                     "jinglirun": "净利润",
                     "zhuyingshouru": "主营业务收入",
@@ -778,15 +786,30 @@ def get_fundamentals(
                     if field in idx:
                         val = row[field]
                         if val is not None and str(val) != "nan" and val != 0:
-                            if field == "industry":
-                                # industry is a numeric code; display as-is
-                                lines.append(f"{label}代码: {int(val)}")
-                            elif field in ("jinglirun", "zhuyingshouru"):
+                            if field in ("jinglirun", "zhuyingshouru"):
                                 lines.append(f"{label}: {val / 1e8:.2f} 亿")
                             elif field in ("liutongguben", "zongguben"):
                                 lines.append(f"{label}: {val / 1e8:.2f} 亿股")
                             else:
                                 lines.append(f"{label}: {val}")
+
+                # Industry name (from numeric code)
+                _ind_name = _INDUSTRY_NAMES.get(
+                    int(row["industry"]), ""
+                ) if "industry" in idx and row["industry"] else ""
+                if _ind_name:
+                    lines.append(f"行业: {_ind_name}")
+                elif "industry" in idx:
+                    lines.append(f"行业代码: {int(row['industry'])}")
+
+                # IPO date (format: 20111103 → 2011-11-03)
+                if "ipo_date" in idx and row["ipo_date"]:
+                    try:
+                        ipo_str = str(int(row["ipo_date"]))
+                        ipo_fmt = f"{ipo_str[:4]}-{ipo_str[4:6]}-{ipo_str[6:8]}"
+                        lines.append(f"上市日期: {ipo_fmt}")
+                    except (ValueError, TypeError):
+                        pass
 
                 # Derived fields
                 if "jinglirun" in idx and "zongguben" in idx:
@@ -1243,7 +1266,7 @@ def get_global_news(
     look_back_days: Annotated[int, "Days to look back"] = 7,
     limit: Annotated[int, "Max articles"] = 10,
 ) -> str:
-    """Get China/global financial news via direct HTTP (CLS + Eastmoney)."""
+    """Get China/global financial news via Eastmoney 7x24 direct HTTP."""
     start_dt = datetime.strptime(curr_date, "%Y-%m-%d") - relativedelta(
         days=look_back_days
     )
@@ -1251,42 +1274,7 @@ def get_global_news(
 
     all_news: list[dict] = []
 
-    # Source 1: CLS wire (财联社快讯) — direct HTTP
-    # CLS API may return 404/HTML when endpoint changes; degrade gracefully.
-    try:
-        cls_url = "https://www.cls.cn/nodeapi/telegraphList"
-        cls_params = {"rn": str(limit), "page": "1"}
-        cls_headers = {"User-Agent": _UA, "Referer": "https://www.cls.cn/"}
-        r_cls = _requests.get(cls_url, params=cls_params, headers=cls_headers, timeout=10)
-        if r_cls.status_code != 200:
-            logger.warning("CLS news returned HTTP %d (endpoint may have changed)", r_cls.status_code)
-        else:
-            try:
-                d_cls = r_cls.json()
-            except ValueError:
-                logger.warning("CLS news response is not valid JSON")
-                d_cls = {}
-            for item in d_cls.get("data", {}).get("roll_data", []):
-                title = item.get("title", "") or item.get("brief", "")
-                content = item.get("content", "") or item.get("brief", "")
-                ctime = item.get("ctime", "")
-                # ctime is unix timestamp
-                pub_time = ""
-                if ctime:
-                    try:
-                        pub_time = datetime.fromtimestamp(int(ctime)).strftime("%Y-%m-%d %H:%M")
-                    except (ValueError, TypeError, OSError):
-                        pub_time = str(ctime)
-                all_news.append({
-                    "title": title,
-                    "content": content,
-                    "time": pub_time,
-                    "source": "CLS Wire",
-                })
-    except Exception as e:
-        logger.warning("CLS news fetch failed: %s", e)
-
-    # Source 2: Eastmoney global (东财7x24资讯) — direct HTTP
+    # Source: Eastmoney global (东财7x24资讯) — direct HTTP
     try:
         em_url = "https://np-weblist.eastmoney.com/comm/web/getFastNewsList"
         em_params = {
