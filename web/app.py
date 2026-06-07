@@ -190,6 +190,7 @@ if start_req:
     st.session_state.pop("tracker", None)
     st.session_state.pop("viewing_history", None)
     st.session_state.pop("_hist_cleared", None)
+    st.session_state.pop("_run_cleared", None)
 
     # Clear stale report content before showing the init placeholder
     for _ in range(30):
@@ -295,12 +296,21 @@ if viewing_history:
 
 # State 2: Analysis running
 elif tracker and tracker.is_running:
+    # On first entry, clear leftover placeholder elements from start_analysis
+    if not st.session_state.get("_run_cleared"):
+        for _ in range(35):
+            st.empty()
+        st.session_state["_run_cleared"] = True
+        st.rerun()
+    if st.session_state.get("_stopping"):
+        st.info("⏳ 正在停止分析，请稍候…")
     render_progress(tracker)
     time.sleep(2)
     st.rerun()
 
 # State 3: Analysis complete
 elif tracker and tracker.is_complete:
+    st.session_state.pop("_stopping", None)
     render_report(
         tracker.final_state,
         tracker.ticker,
@@ -311,6 +321,7 @@ elif tracker and tracker.is_complete:
 
 # State 4: Analysis errored / cancelled
 elif tracker and tracker.error:
+    st.session_state.pop("_stopping", None)
     if "中止" in tracker.error:
         st.warning(f"⏹ {tracker.error}")
     else:

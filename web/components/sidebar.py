@@ -156,10 +156,17 @@ def render_sidebar() -> None:
                     "trade_date": resolved_date,
                 }
                 st.session_state["viewing_history"] = None
+                st.session_state["_stopping"] = False
     else:
-        if st.button("⏹ 停止分析", use_container_width=True, type="secondary"):
-            tracker.request_stop()
-            st.rerun()
+        stopping = st.session_state.get("_stopping", False)
+        if stopping:
+            st.button("⏹ 正在停止分析…", use_container_width=True,
+                      type="secondary", disabled=True)
+        else:
+            if st.button("⏹ 停止分析", use_container_width=True, type="secondary"):
+                tracker.request_stop()
+                st.session_state["_stopping"] = True
+                st.rerun()
 
     st.markdown("---")
     st.markdown("#### 历史记录")
