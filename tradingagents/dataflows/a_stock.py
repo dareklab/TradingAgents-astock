@@ -1978,6 +1978,8 @@ def get_dragon_tiger_board(
         lines.append(f"龙虎榜列表查询失败: {e}")
 
     # 2. 最近上榜的买卖席位 — eastmoney datacenter direct HTTP
+    buy_data: list[dict] = []
+    sell_data: list[dict] = []
     try:
         if data:
             latest_date = str(data[0].get("TRADE_DATE", ""))[:10]

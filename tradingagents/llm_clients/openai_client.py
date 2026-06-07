@@ -29,6 +29,12 @@ class NormalizedChatOpenAI(ChatOpenAI):
     def with_structured_output(self, schema, *, method=None, **kwargs):
         if method is None:
             method = "function_calling"
+        if _is_minimax_thinking(self.model_name):
+            raise NotImplementedError(
+                f"{self.model_name} thinking mode does not support "
+                "tool_choice; structured output is unavailable. "
+                "Agent factories fall back to free-text generation automatically."
+            )
         return super().with_structured_output(schema, method=method, **kwargs)
 
 
@@ -101,15 +107,28 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
                 "output is unavailable. Agent factories fall back to "
                 "free-text generation automatically."
             )
+        if _is_minimax_thinking(self.model_name):
+            raise NotImplementedError(
+                f"{self.model_name} thinking mode does not support "
+                "tool_choice; structured output is unavailable. "
+                "Agent factories fall back to free-text generation automatically."
+            )
         return super().with_structured_output(schema, method=method, **kwargs)
 
 
 # MiniMax thinking models: base flagship models have thinking enabled by
 # default.  Variants with "highspeed" in the name disable thinking.
-# Used by MiniMaxChatOpenAI._is_thinking_model() — module-level so
-# Pydantic doesn't intercept the underscore-prefixed attributes.
 _MINIMAX_THINKING_PREFIXES = ("MiniMax-M2", "MiniMax-M1")
 _MINIMAX_NON_THINKING_SUBSTR = "highspeed"
+
+
+def _is_minimax_thinking(model_name: str) -> bool:
+    """Return True if *model_name* is a MiniMax model with thinking enabled."""
+    if not model_name:
+        return False
+    if _MINIMAX_NON_THINKING_SUBSTR.lower() in model_name.lower():
+        return False
+    return any(model_name.startswith(p) for p in _MINIMAX_THINKING_PREFIXES)
 
 
 class MiniMaxChatOpenAI(NormalizedChatOpenAI):
@@ -126,15 +145,8 @@ class MiniMaxChatOpenAI(NormalizedChatOpenAI):
     See ``tradingagents/agents/utils/structured.py`` for the fallback.
     """
 
-    @staticmethod
-    def _is_thinking_model(model_name: str) -> bool:
-        """Return True if *model_name* is a MiniMax model with thinking enabled."""
-        if _MINIMAX_NON_THINKING_SUBSTR.lower() in model_name.lower():
-            return False
-        return any(model_name.startswith(p) for p in _MINIMAX_THINKING_PREFIXES)
-
     def with_structured_output(self, schema, *, method=None, **kwargs):
-        if self._is_thinking_model(self.model_name):
+        if _is_minimax_thinking(self.model_name):
             raise NotImplementedError(
                 f"{self.model_name} thinking mode does not support "
                 "tool_choice; structured output is unavailable. "

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import os
 import sys
 import time
@@ -10,8 +9,6 @@ from pathlib import Path
 
 import streamlit as st
 from dotenv import load_dotenv
-
-_log = logging.getLogger("web.app")
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
@@ -256,7 +253,7 @@ if viewing_history:
     )
 
     if _phase == 0:
-        # Phase 1 — push the loading screen to the browser
+        # Phase 1 — push loading UI to the browser
         st.markdown(
             """<div style="display:flex;align-items:center;justify-content:center;
             min-height:60vh;flex-direction:column;">
@@ -268,6 +265,7 @@ if viewing_history:
         )
         st.session_state[_phase_key] = 1
         st.session_state["_hld_start"] = time.time()
+        time.sleep(0.5)
         st.rerun()
 
     # Phase 2 — load data while Phase 1's spinner runs in the browser
