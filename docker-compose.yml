@@ -1,17 +1,5 @@
 services:
-  tradingagents:
-    build: .
-    image: tradingagents-astock:latest
-    env_file:
-      - .env
-    volumes:
-      - ~/.tradingagents:/home/appuser/.tradingagents
-    profiles:
-      - cli
-    tty: true
-    stdin_open: true
-
-  web:
+  tradingagents-astock:
     build: .
     image: tradingagents-astock:latest
     ports:
@@ -21,32 +9,12 @@ services:
     volumes:
       - .:/home/appuser/app
       - ~/.tradingagents:/home/appuser/.tradingagents
+    environment:
+      TZ: Asia/Shanghai
     entrypoint: [ "streamlit", "run", "/home/appuser/app/web/app.py" ]
     command: [ ]
     tty: true
     stdin_open: true
-
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama_data:/root/.ollama
-    profiles:
-      - ollama
-
-  tradingagents-ollama:
-    build: .
-    env_file:
-      - .env
-    environment:
-      - LLM_PROVIDER=ollama
-    volumes:
-      - ~/.tradingagents:/home/appuser/.tradingagents
-    depends_on:
-      - ollama
-    tty: true
-    stdin_open: true
-    profiles:
-      - ollama
 
 volumes:
   ollama_data:

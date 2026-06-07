@@ -88,7 +88,8 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     data = _clean_dataframe(data)
 
     # Filter to curr_date to prevent look-ahead bias in backtesting
-    data = data[data["Date"] <= curr_date_dt]
+    # Normalize dates — OHLCV data may have 15:00 timestamps vs midnight cutoff
+    data = data[data["Date"].dt.normalize() <= curr_date_dt.normalize()]
 
     return data
 

@@ -475,13 +475,15 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
             data["Date"] = pd.to_datetime(data["Date"])
             # Even if cached today, check whether the cache actually covers
             # the requested date (TDX servers may not have weekend updates).
-            max_cached = data["Date"].max()
+            max_cached_ts = data["Date"].max()
             cutoff = pd.to_datetime(curr_date)
-            if max_cached >= cutoff:
-                return data[data["Date"] <= cutoff]
+            # Compare by date only — mootdx timestamps are at 15:00
+            # while pd.to_datetime("2026-06-05") is midnight.
+            if max_cached_ts.normalize() >= cutoff.normalize():
+                return data[data["Date"].dt.normalize() <= cutoff.normalize()]
             logger.info(
                 "Cache for %s last date=%s < trade_date=%s, forcing refresh",
-                code, max_cached.strftime("%Y-%m-%d"), curr_date,
+                code, max_cached_ts.strftime("%Y-%m-%d"), curr_date,
             )
             # Fall through to refresh
 
@@ -521,9 +523,9 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
     # When the data source (TDX) hasn't pushed the latest trading day's
     # bar yet (common on weekends), use the Tencent real-time quote as a
     # synthetic latest row so reports show the most recent closing price.
-    cutoff = pd.to_datetime(curr_date)
+    cutoff = pd.to_datetime(curr_date).normalize()
     latest_bar = df["Date"].max()
-    if latest_bar < cutoff:
+    if latest_bar.normalize() < cutoff:
         try:
             tq = _tencent_quote([code])
             if code in tq:
@@ -552,8 +554,10 @@ def _load_ohlcv_astock(symbol: str, curr_date: str) -> pd.DataFrame:
         except Exception as e:
             logger.debug("Tencent supplement failed for %s: %s", code, e)
 
-    # Filter by curr_date to prevent look-ahead bias
-    return df[df["Date"] <= cutoff]
+    # Filter by curr_date to prevent look-ahead bias.  Normalize both sides
+    # to date-only because mootdx timestamps are at 15:00 while the cutoff
+    # from pd.to_datetime("yyyy-mm-dd") is at midnight.
+    return df[df["Date"].dt.normalize() <= cutoff.normalize()]
 
 
 # ===========================================================================
@@ -606,10 +610,10 @@ def get_stock_data(
         except Exception:
             return "K线数据获取失败：mootdx和新浪备用源均不可用，请检查网络连接"
 
-    # Filter by date range
-    start_dt = pd.to_datetime(start_date)
-    end_dt = pd.to_datetime(end_date)
-    df = df[(df["Date"] >= start_dt) & (df["Date"] <= end_dt)]
+    # Filter by date range (normalize to date-only — mootdx has 15:00 timestamps)
+    start_dt = pd.to_datetime(start_date).normalize()
+    end_dt = pd.to_datetime(end_date).normalize()
+    df = df[(df["Date"].dt.normalize() >= start_dt) & (df["Date"].dt.normalize() <= end_dt)]
 
     if df.empty:
         return (
