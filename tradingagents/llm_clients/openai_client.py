@@ -103,6 +103,45 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
             )
         return super().with_structured_output(schema, method=method, **kwargs)
 
+
+# MiniMax thinking models: base flagship models have thinking enabled by
+# default.  Variants with "highspeed" in the name disable thinking.
+# Used by MiniMaxChatOpenAI._is_thinking_model() — module-level so
+# Pydantic doesn't intercept the underscore-prefixed attributes.
+_MINIMAX_THINKING_PREFIXES = ("MiniMax-M2", "MiniMax-M1")
+_MINIMAX_NON_THINKING_SUBSTR = "highspeed"
+
+
+class MiniMaxChatOpenAI(NormalizedChatOpenAI):
+    """MiniMax-specific: thinking models (M2.7, M2.5) don't support tool_choice.
+
+    MiniMax API returns HTTP 400 "Thinking mode does not support this
+    tool_choice" when function-calling based structured output is used
+    with a thinking-enabled model.  Non-thinking variants ("highspeed"
+    suffix) are unaffected.
+
+    We detect MiniMax thinking models by name and raise NotImplementedError
+    at *bind* time (before any API call) so agent factories skip the
+    structured-output path cleanly without a wasted request + retry loop.
+    See ``tradingagents/agents/utils/structured.py`` for the fallback.
+    """
+
+    @staticmethod
+    def _is_thinking_model(model_name: str) -> bool:
+        """Return True if *model_name* is a MiniMax model with thinking enabled."""
+        if _MINIMAX_NON_THINKING_SUBSTR.lower() in model_name.lower():
+            return False
+        return any(model_name.startswith(p) for p in _MINIMAX_THINKING_PREFIXES)
+
+    def with_structured_output(self, schema, *, method=None, **kwargs):
+        if self._is_thinking_model(self.model_name):
+            raise NotImplementedError(
+                f"{self.model_name} thinking mode does not support "
+                "tool_choice; structured output is unavailable. "
+                "Agent factories fall back to free-text generation automatically."
+            )
+        return super().with_structured_output(schema, method=method, **kwargs)
+
 # Kwargs forwarded from user config to ChatOpenAI
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort",
@@ -172,7 +211,12 @@ class OpenAIClient(BaseLLMClient):
 
         # DeepSeek's thinking-mode quirks live in their own subclass so the
         # base NormalizedChatOpenAI stays free of provider-specific branches.
-        chat_cls = DeepSeekChatOpenAI if self.provider == "deepseek" else NormalizedChatOpenAI
+        if self.provider == "deepseek":
+            chat_cls = DeepSeekChatOpenAI
+        elif self.provider == "minimax":
+            chat_cls = MiniMaxChatOpenAI
+        else:
+            chat_cls = NormalizedChatOpenAI
         return chat_cls(**llm_kwargs)
 
     def validate_model(self) -> bool:

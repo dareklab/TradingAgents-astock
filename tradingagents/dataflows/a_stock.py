@@ -292,10 +292,13 @@ def _em_get(url, params=None, headers=None, timeout=15, max_retries=2, **kwargs)
     串行限流：与上次东财请求间隔 < EM_MIN_INTERVAL 时 sleep 补足 + 0.1~0.5s 随机抖动。
     传入的 headers 会覆盖 session 默认 UA（用于保留各端点自己的 Referer/Origin）。
 
-    Retry: 对 ConnectionError / ReadTimeout 指数退避重试 (1s, 2s)，
-    最多 max_retries 次（默认 2 次 = 共 3 次尝试）。
+    Retry: 对 ConnectionError / ReadTimeout / ChunkedEncodingError 指数退避重试
+    (1s, 2s)，最多 max_retries 次（默认 2 次 = 共 3 次尝试）。
+    连接失败后重置 session 连接池，避免复用已被远端关闭的 Keep-Alive 连接。
     HTTP 4xx/5xx 不重试（上游问题，重试无意义）。
     """
+    global _EM_SESSION
+
     wait = _EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
     if wait > 0:
         time.sleep(wait + random.uniform(0.1, 0.5))
@@ -307,14 +310,27 @@ def _em_get(url, params=None, headers=None, timeout=15, max_retries=2, **kwargs)
                 url, params=params, headers=headers, timeout=timeout, **kwargs
             )
             return resp
-        except (_requests.ConnectionError, _requests.ReadTimeout) as e:
+        except (
+            _requests.ConnectionError,
+            _requests.ReadTimeout,
+            _requests.exceptions.ChunkedEncodingError,
+        ) as e:
             last_exc = e
             if attempt < max_retries:
                 backoff = 2 ** attempt  # 1s, 2s
-                logger.warning(
+                logger.info(
                     "_em_get attempt %d/%d failed for %s: %s, retrying in %ds",
                     attempt + 1, max_retries + 1, url, e, backoff,
                 )
+                # Recreate session to drop stale Keep-Alive connections.
+                # The server may have closed the connection between requests;
+                # reusing a dead socket triggers RemoteDisconnected on every retry.
+                try:
+                    _EM_SESSION.close()
+                except Exception:
+                    pass
+                _EM_SESSION = _requests.Session()
+                _EM_SESSION.headers.update({"User-Agent": _UA})
                 time.sleep(backoff)
             else:
                 raise last_exc
@@ -359,14 +375,19 @@ def _ths_eps_forecast(code: str) -> pd.DataFrame:
 
     Returns DataFrame with columns roughly: 年度, 预测机构数, 最小值, 均值, 最大值.
     """
+    import io as _io
+
     url = f"https://basic.10jqka.com.cn/new/{code}/worth.html"
     headers = {
         "User-Agent": _UA,
         "Referer": "https://basic.10jqka.com.cn/",
     }
     r = _requests.get(url, headers=headers, timeout=15)
+    r.raise_for_status()
     r.encoding = "gbk"
-    dfs = pd.read_html(r.text)
+    # Use io.StringIO to explicitly hint pd.read_html that this is HTML text,
+    # not a file path or URL (avoids FileNotFoundError on some platforms).
+    dfs = pd.read_html(_io.StringIO(r.text))
     # Find the table containing EPS data
     for df in dfs:
         cols = [str(c) for c in df.columns]
@@ -738,25 +759,54 @@ def get_fundamentals(
                 isinstance(fin, pd.DataFrame) and fin.empty
             ):
                 row = fin.iloc[0] if isinstance(fin, pd.DataFrame) else fin
-                field_map = {
-                    "eps": "EPS (Quarterly)",
-                    "bvps": "Book Value Per Share",
-                    "roe": "ROE (%)",
-                    "profit": "Net Profit",
-                    "income": "Revenue",
-                    "liutongguben": "Float Shares",
-                    "zongguben": "Total Shares",
-                }
                 idx = row.index if hasattr(row, "index") else []
-                for field, label in field_map.items():
+
+                # Direct fields (pinyin column names)
+                direct_fields = {
+                    "industry": "行业",
+                    "meigujingzichan": "每股净资产 (BVPS)",
+                    "jinglirun": "净利润",
+                    "zhuyingshouru": "主营业务收入",
+                    "liutongguben": "流通股本",
+                    "zongguben": "总股本",
+                }
+                for field, label in direct_fields.items():
                     if field in idx:
                         val = row[field]
-                        if val is not None and str(val) != "nan":
-                            lines.append(f"{label}: {val}")
+                        if val is not None and str(val) != "nan" and val != 0:
+                            if field == "industry":
+                                # industry is a numeric code; display as-is
+                                lines.append(f"{label}代码: {int(val)}")
+                            elif field in ("jinglirun", "zhuyingshouru"):
+                                lines.append(f"{label}: {val / 1e8:.2f} 亿")
+                            elif field in ("liutongguben", "zongguben"):
+                                lines.append(f"{label}: {val / 1e8:.2f} 亿股")
+                            else:
+                                lines.append(f"{label}: {val}")
+
+                # Derived fields
+                if "jinglirun" in idx and "zongguben" in idx:
+                    net_profit = row["jinglirun"]
+                    total_shares = row["zongguben"]
+                    if net_profit and total_shares:
+                        eps = net_profit / total_shares
+                        lines.append(f"EPS (季度): {eps:.4f}")
+
+                if "jinglirun" in idx and "jingzichan" in idx:
+                    net_profit = row["jinglirun"]
+                    net_assets = row["jingzichan"]
+                    if net_profit and net_assets:
+                        roe = (net_profit / net_assets) * 100
+                        lines.append(f"ROE: {roe:.2f}%")
         except Exception as e:
             logger.warning("mootdx finance failed for %s: %s", code, e)
 
         # --- Eastmoney push2: basic stock info (direct HTTP) ---
+        # push2.eastmoney.com blocks Docker/non-public IPs.  Most fields are
+        # already covered by Tencent (market cap) and mootdx (total/float shares).
+        # Only 行业 (industry) and 上市日期 (listing date) are push2-unique.
+        # Warn once per stock code then degrade silently.
+        _push2_warned: set[str] = getattr(get_fundamentals, "_push2_warned", set())
         try:
             market_code = 1 if code.startswith("6") else 0
             _info_url = "https://push2.eastmoney.com/api/qt/stock/get"
@@ -782,7 +832,13 @@ def get_fundamentals(
                 if d.get("f189"):
                     lines.append(f"上市日期: {d['f189']}")
         except Exception as e:
-            logger.warning("eastmoney push2 stock info failed for %s: %s", code, e)
+            if code not in _push2_warned:
+                logger.info(
+                    "eastmoney push2 unavailable for %s (expected in Docker): %s",
+                    code, e,
+                )
+                _push2_warned.add(code)
+                get_fundamentals._push2_warned = _push2_warned  # type: ignore[attr-defined]
 
         # --- 同花顺 direct HTTP: consensus EPS forecast ---
         try:
@@ -1192,29 +1248,37 @@ def get_global_news(
     all_news: list[dict] = []
 
     # Source 1: CLS wire (财联社快讯) — direct HTTP
+    # CLS API may return 404/HTML when endpoint changes; degrade gracefully.
     try:
         cls_url = "https://www.cls.cn/nodeapi/telegraphList"
         cls_params = {"rn": str(limit), "page": "1"}
         cls_headers = {"User-Agent": _UA, "Referer": "https://www.cls.cn/"}
         r_cls = _requests.get(cls_url, params=cls_params, headers=cls_headers, timeout=10)
-        d_cls = r_cls.json()
-        for item in d_cls.get("data", {}).get("roll_data", []):
-            title = item.get("title", "") or item.get("brief", "")
-            content = item.get("content", "") or item.get("brief", "")
-            ctime = item.get("ctime", "")
-            # ctime is unix timestamp
-            pub_time = ""
-            if ctime:
-                try:
-                    pub_time = datetime.fromtimestamp(int(ctime)).strftime("%Y-%m-%d %H:%M")
-                except (ValueError, TypeError, OSError):
-                    pub_time = str(ctime)
-            all_news.append({
-                "title": title,
-                "content": content,
-                "time": pub_time,
-                "source": "CLS Wire",
-            })
+        if r_cls.status_code != 200:
+            logger.warning("CLS news returned HTTP %d (endpoint may have changed)", r_cls.status_code)
+        else:
+            try:
+                d_cls = r_cls.json()
+            except ValueError:
+                logger.warning("CLS news response is not valid JSON")
+                d_cls = {}
+            for item in d_cls.get("data", {}).get("roll_data", []):
+                title = item.get("title", "") or item.get("brief", "")
+                content = item.get("content", "") or item.get("brief", "")
+                ctime = item.get("ctime", "")
+                # ctime is unix timestamp
+                pub_time = ""
+                if ctime:
+                    try:
+                        pub_time = datetime.fromtimestamp(int(ctime)).strftime("%Y-%m-%d %H:%M")
+                    except (ValueError, TypeError, OSError):
+                        pub_time = str(ctime)
+                all_news.append({
+                    "title": title,
+                    "content": content,
+                    "time": pub_time,
+                    "source": "CLS Wire",
+                })
     except Exception as e:
         logger.warning("CLS news fetch failed: %s", e)
 
