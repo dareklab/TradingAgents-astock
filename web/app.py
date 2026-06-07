@@ -107,6 +107,7 @@ st.markdown(
         border: 1px solid #2a2a2a !important;
         color: #ccc !important;
         transition: all 0.15s ease !important;
+        white-space: nowrap !important;
     }
     button[kind="secondary"]:hover {
         background: #1e1e1e !important;
@@ -128,11 +129,6 @@ st.markdown(
     .stTabs [aria-selected="true"] {
         color: #ff5a1f !important;
         border-bottom-color: #ff5a1f !important;
-    }
-    div[data-testid="stDownloadButton"] button {
-        background: #1a1a2e !important;
-        border: 1px solid #ff5a1f !important;
-        color: #ff5a1f !important;
     }
     /* Text input styling */
     input[data-testid="stTextInputRootElement"] input,
@@ -285,8 +281,6 @@ if viewing_history:
     _elapsed = time.time() - _start
     if _elapsed < 2.0:
         time.sleep(2.0 - _elapsed)
-
-    st.session_state.pop(_phase_key, None)
 
     if _load_err is not None:
         st.error(f"加载失败: {_load_err}")
