@@ -1,0 +1,335 @@
+"""Background task manager for long-running analysis jobs.
+
+Tasks run in a dedicated thread and survive client disconnects.
+The frontend can poll task status, list running/pending tasks, and cancel them.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import functools
+import json
+import logging
+import re
+import threading
+import time
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
+_CST = timezone(timedelta(hours=8))
+
+# ── Task status constants ───────────────────────────────────────────────────
+
+TASK_PENDING = "pending"
+TASK_RUNNING = "running"
+TASK_COMPLETE = "complete"
+TASK_ERROR = "error"
+TASK_CANCELLED = "cancelled"
+
+
+# ── Task model ──────────────────────────────────────────────────────────────
+
+@dataclass
+class AnalysisTask:
+    """Represents a single analysis task in the background queue."""
+
+    id: str
+    ticker: str
+    trade_date: str
+    config: dict[str, Any]
+    created_at: float = field(default_factory=time.time)
+
+    # Mutable state – updated by the worker thread
+    status: str = TASK_PENDING
+    progress: dict[str, Any] = field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    cancel_requested: bool = False
+    thread: threading.Thread | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    @property
+    def elapsed(self) -> float:
+        return time.time() - self.created_at
+
+    @property
+    def display_name(self) -> str:
+        return self.progress.get("display_name", self.ticker)
+
+    def to_dict(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "id": self.id,
+                "ticker": self.ticker,
+                "tradeDate": self.trade_date,
+                "status": self.status,
+                "displayName": self.display_name,
+                "createdAt": datetime.fromtimestamp(self.created_at, tz=_CST).isoformat(),
+                "elapsed": self.elapsed,
+                "progress": self.progress,
+                "error": self.error,
+                "completedStages": self.progress.get("completedStages", []),
+                "currentStage": self.progress.get("currentStage", ""),
+                "llmCalls": self.progress.get("llmCalls", 0),
+                "toolCalls": self.progress.get("toolCalls", 0),
+                "tokensIn": self.progress.get("tokensIn", 0),
+                "tokensOut": self.progress.get("tokensOut", 0),
+            }
+
+    def update_progress(self, **kwargs):
+        with self._lock:
+            self.progress.update(kwargs)
+
+
+# ── Manager ─────────────────────────────────────────────────────────────────
+
+class TaskManager:
+    """Thread-safe manager for background analysis tasks.
+
+    Usage::
+
+        mgr = TaskManager()
+        task = mgr.submit("600519", "2026-06-09", config)
+        mgr.list_tasks()  # -> [task.to_dict(), ...]
+        mgr.cancel(task.id)
+        mgr.get_result(task.id)  # -> dict or None
+    """
+
+    def __init__(self):
+        self._tasks: dict[str, AnalysisTask] = {}
+        self._lock = threading.Lock()
+
+    # ── Public API ──────────────────────────────────────────────────────
+
+    def submit(
+        self,
+        ticker: str,
+        trade_date: str,
+        config: dict[str, Any],
+        display_name: str = "",
+    ) -> AnalysisTask:
+        """Create a new task and start it in a background thread."""
+        task_id = uuid.uuid4().hex[:12]
+        task = AnalysisTask(
+            id=task_id,
+            ticker=ticker,
+            trade_date=trade_date,
+            config=config,
+        )
+        if display_name:
+            task.update_progress(display_name=display_name)
+
+        with self._lock:
+            self._tasks[task_id] = task
+
+        # Start in a daemon thread so it doesn't block server shutdown
+        task.thread = threading.Thread(
+            target=_run_analysis,
+            args=(task,),
+            daemon=True,
+        )
+        task.status = TASK_RUNNING
+        task.thread.start()
+
+        return task
+
+    def get(self, task_id: str) -> AnalysisTask | None:
+        with self._lock:
+            return self._tasks.get(task_id)
+
+    def get_result(self, task_id: str) -> dict[str, Any] | None:
+        task = self.get(task_id)
+        if task and task.status in (TASK_COMPLETE, TASK_ERROR, TASK_CANCELLED):
+            return task.result
+        return None
+
+    def list_tasks(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return [t.to_dict() for t in self._tasks.values()]
+
+    def cancel(self, task_id: str) -> bool:
+        task = self.get(task_id)
+        if task and task.status in (TASK_PENDING, TASK_RUNNING):
+            task.cancel_requested = True
+            task.status = TASK_CANCELLED
+            return True
+        return False
+
+    def prune(self, max_age_hours: float = 2):
+        """Remove completed/errored tasks older than ``max_age_hours``."""
+        now = time.time()
+        with self._lock:
+            to_prune = [
+                tid
+                for tid, t in self._tasks.items()
+                if t.status in (TASK_COMPLETE, TASK_ERROR, TASK_CANCELLED)
+                and (now - t.created_at) > max_age_hours * 3600
+            ]
+            for tid in to_prune:
+                del self._tasks[tid]
+            return len(to_prune)
+
+
+# ── Global singleton ────────────────────────────────────────────────────────
+
+_manager: TaskManager | None = None
+
+
+def get_manager() -> TaskManager:
+    global _manager
+    if _manager is None:
+        _manager = TaskManager()
+    return _manager
+
+
+# ── Worker thread ────────────────────────────────────────────────────────────
+
+_ANALYST_REPORT_KEYS = [
+    "market_report", "sentiment_report", "news_report",
+    "fundamentals_report", "policy_report", "hot_money_report", "lockup_report",
+]
+
+
+def _strip_think_tags(text: str) -> str:
+    return re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL).strip()
+
+
+def _run_analysis(task: AnalysisTask):
+    """Execute the analysis graph in a background thread.
+
+    This function runs in a daemon thread and updates ``task`` state
+    as it progresses.
+    """
+    from web.progress import ProgressTracker, PIPELINE_STAGES, STAGE_IDS
+    from cli.stats_handler import StatsCallbackHandler
+    from tradingagents.dataflows.a_stock import resolve_ticker, get_stock_display_name
+    from tradingagents.dataflows.trading_calendar import resolve_analysis_date
+    from tradingagents.graph.trading_graph import TradingAgentsGraph
+
+    _REPORT_KEY_TO_STAGE = {s["report_key"]: s["id"] for s in PIPELINE_STAGES}
+
+    tracker = ProgressTracker()
+    stats = StatsCallbackHandler()
+    trade_date = resolve_analysis_date(task.trade_date)
+
+    def send_progress():
+        completed = list(tracker.completed_stages)
+        s = stats.get_stats()
+        return {
+            "completedStages": completed,
+            "currentStage": tracker.current_stage,
+            "llmCalls": s["llm_calls"],
+            "toolCalls": s["tool_calls"],
+            "tokensIn": s["tokens_in"],
+            "tokensOut": s["tokens_out"],
+            "dataHealth": tracker.get_data_health_summary(),
+            "stageReports": {k: str(v)[:3000] for k, v in tracker.stage_reports.items()},
+            "elapsed": tracker.elapsed,
+        }
+
+    progress_emit = functools.partial(send_progress)
+
+    try:
+        ta = TradingAgentsGraph(debug=True, config=task.config, callbacks=[stats])
+        ta.ticker = task.ticker
+
+        init_state = ta.propagator.create_initial_state(task.ticker, trade_date)
+        args = ta.propagator.get_graph_args(callbacks=[stats])
+
+        tracker.is_running = True
+        last_chunk: dict = {}
+
+        # Push initial progress
+        task.update_progress(**progress_emit())
+
+        # Execute the graph
+        for chunk in ta.graph.stream(init_state, **args):
+            if task.cancel_requested:
+                task.status = TASK_CANCELLED
+                task.update_progress(**progress_emit())
+                return
+
+            last_chunk = chunk
+
+            # Detect completed stages
+            for report_key in _ANALYST_REPORT_KEYS:
+                stage_id = _REPORT_KEY_TO_STAGE.get(report_key)
+                if stage_id is None:
+                    continue
+                content = chunk.get(report_key, "")
+                if content and tracker.stage_status(stage_id) != "done":
+                    tracker.mark_stage_done(stage_id, _strip_think_tags(str(content)))
+
+            dqs = chunk.get("data_quality_summary", "")
+            if dqs and tracker.stage_status("quality_gate") != "done":
+                tracker.mark_stage_done("quality_gate", str(dqs))
+
+            debate = chunk.get("investment_debate_state")
+            if debate and isinstance(debate, dict):
+                judge = debate.get("judge_decision", "")
+                if judge and tracker.stage_status("debate") != "done":
+                    tracker.mark_stage_done("debate", str(judge))
+
+            trader_plan = chunk.get("trader_investment_plan", "")
+            if trader_plan and tracker.stage_status("trader") != "done":
+                tracker.mark_stage_done("trader", _strip_think_tags(str(trader_plan)))
+
+            risk = chunk.get("risk_debate_state")
+            if risk and isinstance(risk, dict):
+                risk_judge = risk.get("judge_decision", "")
+                if risk_judge and tracker.stage_status("risk") != "done":
+                    tracker.mark_stage_done("risk", str(risk_judge))
+
+            final = chunk.get("final_trade_decision", "")
+            if final and tracker.stage_status("pm") != "done":
+                tracker.mark_stage_done("pm", _strip_think_tags(str(final)))
+
+            # Update active stage
+            for sid in STAGE_IDS:
+                if tracker.stage_status(sid) == "pending":
+                    tracker.mark_stage_active(sid)
+                    break
+
+            s = stats.get_stats()
+            tracker.update_stats(s["llm_calls"], s["tool_calls"], s["tokens_in"], s["tokens_out"])
+
+            task.update_progress(**progress_emit())
+
+        # Analysis complete
+        signal = ta.process_signal(last_chunk.get("final_trade_decision", ""))
+        ta._log_state(trade_date, last_chunk)
+        tracker.mark_complete(last_chunk, signal)
+
+        try:
+            display_name = get_stock_display_name(task.ticker)
+        except Exception:
+            display_name = task.ticker
+
+        analysis_time = datetime.now(_CST).strftime("%Y-%m-%d %H:%M:%S")
+        task.result = {
+            "ticker": task.ticker,
+            "tradeDate": trade_date,
+            "signal": signal,
+            "elapsed": tracker.elapsed,
+            "state": _serialize_state(last_chunk),
+            "display_name": display_name,
+            "analysis_time": analysis_time,
+        }
+        task.status = TASK_COMPLETE
+        task.update_progress(display_name=display_name, **progress_emit())
+
+    except Exception as e:
+        logger.exception("Analysis failed for %s on %s", task.ticker, trade_date)
+        task.status = TASK_ERROR
+        task.error = str(e)
+        task.update_progress(**progress_emit())
+
+
+def _serialize_state(final_state: dict) -> dict:
+    """Deep-copy state to plain JSON-safe dicts."""
+    import copy
+    return copy.deepcopy(final_state)
