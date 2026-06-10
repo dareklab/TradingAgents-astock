@@ -60,41 +60,48 @@ def extract_signal(state: dict[str, Any]) -> str:
     """Extract the short signal (Buy/Sell/Hold) from a final state dict.
 
     Priority:
-    1. If a ``rating`` field exists in the saved JSON (v0.2.12+), use it directly.
-    2. Otherwise use the shared 5-tier rating parser on ``final_trade_decision``.
+    1. If a ``rating`` field is a non-empty known value, use it directly.
+    2. For empty-string rating or missing rating, parse from final_trade_decision
+       or other decision fields using keyword matching (Chinese & English).
+    3. Fallback: ``N/A``.
 
     Returns one of ``Buy`` / ``Sell`` / ``Hold``.
     """
-    # v0.2.12+: structured rating stored directly in the saved state
-    stored_rating = state.get("rating", "")
-    if stored_rating:
-        _FIVE_TO_THREE = {
-            "Buy": "Buy", "Overweight": "Buy",
-            "Sell": "Sell", "Underweight": "Sell",
-            "Hold": "Hold",
-        }
-        if stored_rating in _FIVE_TO_THREE:
-            return _FIVE_TO_THREE[stored_rating]
-
-    # Fallback for older saved files: parse from final_trade_decision text
-    from tradingagents.agents.utils.rating import parse_rating
-
     _FIVE_TO_THREE = {
         "Buy": "Buy", "Overweight": "Buy",
         "Sell": "Sell", "Underweight": "Sell",
         "Hold": "Hold",
     }
 
+    # Priority 1: stored rating that is a known value
+    stored_rating = state.get("rating", "")
+    if stored_rating and stored_rating in _FIVE_TO_THREE:
+        return _FIVE_TO_THREE[stored_rating]
+
+    # Priority 2: parse the first ~500 chars of each decision field for a rating pattern.
+    # This avoids false matches from general discussion (e.g. "大股东增持").
+    # Prefer "减持"/"卖出" over "增持"/"买入" when both appear, since
+    # a cautious rating (减持) is more actionable than incidental mentions.
+    _TEXT_SIGNALS: list[tuple[list[str], str]] = [
+        (["减持", "卖出", "Sell", "Underweight"], "Sell"),
+        (["增持", "买入", "Buy", "Overweight"], "Buy"),
+        (["持有", "持仓", "观望", "Hold"], "Hold"),
+    ]
+
     for field in (
         "final_trade_decision",
         "trader_investment_decision",
+        "rating",          # in case rating is a Chinese text like "增持"
         "investment_plan",
     ):
         text = state.get(field, "")
         if not text:
             continue
-        rating = parse_rating(text)
-        if rating in _FIVE_TO_THREE:
-            return _FIVE_TO_THREE[rating]
+        # Only check first 500 chars where the rating/decision is usually stated
+        text = text[:500]
+        for keywords, signal in _TEXT_SIGNALS:
+            for kw in keywords:
+                if kw in text:
+                    return signal
 
     return "N/A"

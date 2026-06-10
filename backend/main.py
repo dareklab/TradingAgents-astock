@@ -200,7 +200,10 @@ async def api_load_history(req: LoadHistoryRequest):
             "display_name": display_name,
             "analysis_time": analysis_time,
         }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error("Failed to load history: %s", e, exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 
