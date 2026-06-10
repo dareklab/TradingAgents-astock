@@ -1,6 +1,25 @@
+import { useMemo } from "react";
+import { marked } from "marked";
 import type { ProgressState } from "@/lib/types";
 import { PIPELINE_STAGES } from "@/lib/types";
 import { Progress } from "@/components/ui/progress";
+
+function MarkdownContent({ text }: { text: string }) {
+  const html = useMemo(() => {
+    try {
+      const cleaned = text.replace(/<think>.*?<\/think>\s*/gs, "").trim();
+      return marked.parse(cleaned, { async: false }) as string;
+    } catch {
+      return `<pre class="text-sm whitespace-pre-wrap">${text}</pre>`;
+    }
+  }, [text]);
+  return (
+    <div
+      className="prose-content text-sm leading-relaxed"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
 
 interface Props {
   progress: ProgressState;
@@ -25,7 +44,7 @@ export default function ProgressPanel({ progress, displayName }: Props) {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-8 animate-fadeIn">
+    <div className="py-8 animate-fadeIn">
       {/* Header */}
       <div className="text-center mb-8">
         <div className="text-2xl text-[#f0ede8] font-bold tracking-tight mb-2">{displayName} 分析中…</div>
@@ -103,18 +122,24 @@ export default function ProgressPanel({ progress, displayName }: Props) {
           <div className="text-[10px] text-[#555] tracking-wider uppercase mb-2">
             已完成报告 ({PIPELINE_STAGES.filter(s => progress.stageReports?.[s.id]).length})
           </div>
-          {PIPELINE_STAGES.filter(s => progress.stageReports?.[s.id]).reverse().map(s => (
-            <details key={s.id} className="group rounded-xl border border-[#1a1a1a] bg-[#0d0d0d] overflow-hidden">
-              <summary className="flex items-center gap-2 px-4 py-3 text-sm text-[#888] cursor-pointer hover:text-[#f0ede8] hover:bg-[#111] transition-all">
-                <span className="text-base">{s.icon}</span>
-                <span className="font-medium">{s.name}</span>
-                <svg className="ml-auto w-3.5 h-3.5 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-              </summary>
-              <div className="px-4 pb-4 text-xs text-[#666] whitespace-pre-wrap max-h-72 overflow-y-auto leading-relaxed">
-                {progress.stageReports?.[s.id]?.slice(0, 3000) || ""}
+          {PIPELINE_STAGES.filter(s => progress.stageReports?.[s.id]).reverse().map(s => {
+            const text = progress.stageReports?.[s.id] || "";
+            const truncated = text.length > 3000 ? text.slice(0, 3000) + "…" : text;
+            return (
+              <div key={s.id} className="rounded-xl border border-[#222] bg-[#0d0d0d] overflow-hidden">
+                <details className="group">
+                  <summary className="flex items-center gap-2 px-4 py-3 text-sm text-[#888] cursor-pointer hover:text-[#f0ede8] hover:bg-[#111] transition-all">
+                    <span className="text-base">{s.icon}</span>
+                    <span className="font-medium">{s.name}</span>
+                    <svg className="ml-auto w-3.5 h-3.5 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </summary>
+                  <div className="px-4 pb-4 max-h-96 overflow-y-auto">
+                    <MarkdownContent text={truncated} />
+                  </div>
+                </details>
               </div>
-            </details>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

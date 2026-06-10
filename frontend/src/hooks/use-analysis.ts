@@ -13,6 +13,35 @@ export function useAnalysis() {
   const [isRunning, setIsRunning] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // On mount, recover running tasks from localStorage or the server
+  useEffect(() => {
+    const recover = async () => {
+      const savedId = (() => { try { return localStorage.getItem("currentTaskId"); } catch { return null; } })();
+      if (savedId) {
+        try {
+          const info = await getTask(savedId);
+          if (info.status === "running" || info.status === "pending") {
+            setTaskId(savedId);
+            setIsRunning(true);
+            return;
+          }
+        } catch {}
+        try { localStorage.removeItem("currentTaskId"); } catch {}
+      }
+      // Fallback: check server for any running tasks
+      try {
+        const tasks = await listTasks();
+        const running = tasks.find(t => t.status === "running" || t.status === "pending");
+        if (running) {
+          setTaskId(running.id);
+          setIsRunning(true);
+          try { localStorage.setItem("currentTaskId", running.id); } catch {}
+        }
+      } catch {}
+    };
+    recover();
+  }, []);
+
   // Poll for task progress
   useEffect(() => {
     if (!taskId) return;
