@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [0.2.12] — 2026-06-10
+
+### Added
+
+- **AgentState 新增 `rating` 字段** — Portfolio Manager 的结构化输出（`PortfolioDecision.rating`）
+  直接存入 `AgentState.rating`，下游 `process_signal` / `_log_state` / `task.result` 优先读取，
+  不再依赖对渲染后 Markdown 的文本解析。旧文件（无 `rating` 字段）自动回退到文本解析兜底。
+  —— `agent_states.py` / `structured.py` / `portfolio_manager.py` / `trading_graph.py` / `backend/task_manager.py` / `web/history.py` / `frontend/src/lib/types.ts`
+
+### Fixed
+
+- **中文评级正则覆盖不全** —— `**评级**：**卖出**`、`**最终评级**：卖出` 等 6 种 LLM 输出格式
+  中，`评级` 与 `：` 之间的 `**` 导致正则匹配失败，fallback 误取"严禁买入"中的"买入"。
+  修复后所有常见格式均可正确匹配 `Sell`。
+  —— `tradingagents/agents/utils/rating.py`
+
+- **历史信号字段优先级倒挂** —— `extract_signal` 中 `investment_plan`（研究经理草案）优先于
+  `final_trade_decision`（组合经理最终裁定），两者矛盾时输出错误信号。改为 `final_trade_decision` 优先。
+  —— `web/history.py`
+
+- **`parse_rating` fallback 否定语境误判** —— 全文回退使用 `rfind` 找最后关键词时，
+  跳过前 12 字符内含 `严禁`/`避免`/`不建` 等否定前缀的匹配项，避免"严禁买入"被误识别为 `Buy`。
+  —— `tradingagents/agents/utils/rating.py`
+
+- **多任务队列前端无法跟踪进度** —— `useAnalysis` hook 只追踪单一 `taskId`，批量提交多只股票时
+  每次调用 `start()` 覆盖前一个 taskId，右侧窗口只显示最后提交的排队任务。
+  改为从 `/api/tasks` 轮询中推导当前运行任务，自动切换进度展示。
+  —— `frontend/src/App.tsx` / `frontend/src/components/sidebar.tsx`
+
+- **历史记录首次加载无状态反馈** —— 初始加载和手动刷新时按钮无变化。新增 `isLoadingHistory` 状态，
+  加载中按钮显示"加载中…"并禁用。
+  —— `frontend/src/components/sidebar.tsx`
+
 ## [0.2.11] — 2026-05-30
 
 ### Changed
