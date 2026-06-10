@@ -108,9 +108,22 @@ class TaskManager:
         self._lock = threading.Lock()
         self._worker_event = threading.Event()
         self._worker_thread: threading.Thread | None = None
+        # Reset any leftover "running" tasks from a previous server instance
+        self._cleanup_orphaned_tasks()
         self._start_worker()
 
     # ── Worker ─────────────────────────────────────────────────────────
+
+    def _cleanup_orphaned_tasks(self):
+        """On startup, reset any tasks stuck in 'running' state.
+        
+        These are tasks from a previous server instance whose worker threads
+        are gone. Mark them as cancelled so the UI can recover.
+        """
+        with self._lock:
+            for task in self._tasks.values():
+                if task.status == TASK_RUNNING:
+                    task.status = TASK_CANCELLED
 
     def _start_worker(self):
         """Start the daemon worker thread if not already running."""
@@ -133,7 +146,13 @@ class TaskManager:
                 continue
 
             # Execute the task (blocking call)
-            _run_analysis(task)
+            try:
+                _run_analysis(task)
+            except Exception as e:
+                logger.exception("Worker thread crashed for task %s (%s): %s", task.ticker, task.id, e)
+                task.status = TASK_ERROR
+                task.error = str(e)
+                task.update_progress()
 
     def _dequeue_next(self) -> AnalysisTask | None:
         """Return the oldest pending task, or None."""
@@ -251,7 +270,11 @@ def _run_analysis(task: AnalysisTask):
     from cli.stats_handler import StatsCallbackHandler
     from tradingagents.dataflows.a_stock import resolve_ticker, get_stock_display_name
     from tradingagents.dataflows.trading_calendar import resolve_analysis_date
-    from tradingagents.graph.trading_graph import TradingAgentsGraph
+    try:
+        from tradingagents.graph.trading_graph import TradingAgentsGraph
+    except ModuleNotFoundError as e:
+        logger.error("Missing module for task %s: %s", task.ticker, e)
+        raise
 
     _REPORT_KEY_TO_STAGE = {s["report_key"]: s["id"] for s in PIPELINE_STAGES}
 

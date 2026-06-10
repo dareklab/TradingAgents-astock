@@ -54,8 +54,8 @@ export default function App() {
   // When a running task appears, switch to progress view
   useEffect(() => {
     if (activeRunningTask) {
-      const dn = activeRunningTask.displayName || activeRunningTask.ticker;
-      setDisplayName(dn);
+      // Only overwrite displayName if not already resolved by handleStartMultiple
+      setDisplayName(prev => prev || activeRunningTask.displayName || activeRunningTask.ticker);
       setState({ type: "running", taskId: activeRunningTask.id });
     } else if (hasPending) {
       setState({ type: "loading", target: "analysis" });

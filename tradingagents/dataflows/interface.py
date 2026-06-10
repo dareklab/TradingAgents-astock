@@ -10,19 +10,31 @@ from .y_finance import (
     get_income_statement as get_yfinance_income_statement,
     get_insider_transactions as get_yfinance_insider_transactions,
 )
-from .yfinance_news import get_news_yfinance, get_global_news_yfinance
-from .alpha_vantage import (
-    get_stock as get_alpha_vantage_stock,
-    get_indicator as get_alpha_vantage_indicator,
-    get_fundamentals as get_alpha_vantage_fundamentals,
-    get_balance_sheet as get_alpha_vantage_balance_sheet,
-    get_cashflow as get_alpha_vantage_cashflow,
-    get_income_statement as get_alpha_vantage_income_statement,
-    get_insider_transactions as get_alpha_vantage_insider_transactions,
-    get_news as get_alpha_vantage_news,
-    get_global_news as get_alpha_vantage_global_news,
-)
-from .alpha_vantage_common import AlphaVantageRateLimitError
+try:
+    from .yfinance_news import get_news_yfinance, get_global_news_yfinance
+except ModuleNotFoundError:
+    # yfinance_news was removed; provide stub functions
+    def get_news_yfinance(*args, **kwargs): return []
+    def get_global_news_yfinance(*args, **kwargs): return []
+try:
+    from .alpha_vantage import (
+        get_stock as get_alpha_vantage_stock,
+        get_indicator as get_alpha_vantage_indicator,
+        get_fundamentals as get_alpha_vantage_fundamentals,
+        get_balance_sheet as get_alpha_vantage_balance_sheet,
+        get_cashflow as get_alpha_vantage_cashflow,
+        get_income_statement as get_alpha_vantage_income_statement,
+        get_insider_transactions as get_alpha_vantage_insider_transactions,
+        get_news as get_alpha_vantage_news,
+        get_global_news as get_alpha_vantage_global_news,
+    )
+    from .alpha_vantage_common import AlphaVantageRateLimitError
+except ModuleNotFoundError:
+    # alpha_vantage modules were removed; provide stubs
+    get_alpha_vantage_stock = get_alpha_vantage_indicator = get_alpha_vantage_fundamentals = None
+    get_alpha_vantage_balance_sheet = get_alpha_vantage_cashflow = get_alpha_vantage_income_statement = None
+    get_alpha_vantage_insider_transactions = get_alpha_vantage_news = get_alpha_vantage_global_news = None
+    AlphaVantageRateLimitError = type('AlphaVantageRateLimitError', (Exception,), {})
 from .a_stock import (
     resolve_ticker,
     get_stock_data as get_astock_stock_data,

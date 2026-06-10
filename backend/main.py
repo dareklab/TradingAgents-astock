@@ -259,11 +259,7 @@ async def api_analyze(req: AnalyzeRequest):
     trade_date = req.tradeDate
 
     mgr = get_manager()
-    try:
-        display_name = get_stock_display_name(ticker)
-    except Exception:
-        display_name = ticker
-    task = mgr.submit(ticker, trade_date, config, display_name=display_name)
+    task = mgr.submit(ticker, trade_date, config)
 
     return {
         "taskId": task.id,
