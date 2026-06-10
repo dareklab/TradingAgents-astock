@@ -24,7 +24,7 @@ Breaking changes within the 0.x line are called out explicitly.
 
 - **历史信号字段优先级倒挂** —— `extract_signal` 中 `investment_plan`（研究经理草案）优先于
   `final_trade_decision`（组合经理最终裁定），两者矛盾时输出错误信号。改为 `final_trade_decision` 优先。
-  —— `web/history.py`
+  —— `backend/history.py`
 
 - **`parse_rating` fallback 否定语境误判** —— 全文回退使用 `rfind` 找最后关键词时，
   跳过前 12 字符内含 `严禁`/`避免`/`不建` 等否定前缀的匹配项，避免"严禁买入"被误识别为 `Buy`。
@@ -38,6 +38,26 @@ Breaking changes within the 0.x line are called out explicitly.
 - **历史记录首次加载无状态反馈** —— 初始加载和手动刷新时按钮无变化。新增 `isLoadingHistory` 状态，
   加载中按钮显示"加载中…"并禁用。
   —— `frontend/src/components/sidebar.tsx`
+
+### Removed
+
+- **旧 Streamlit Web UI** —— 删除整个 `web/` 目录（`app.py`、`launch.py`、`runner.py`、`components/` 等），
+  其核心模块 `history.py` / `progress.py` / `pdf_export.py` 迁入 `backend/`。
+  —— `web/`
+
+- **上游非 A 股数据模块** —— Alpha Vantage 全套（6 文件）、`yfinance_news.py`，A 股数据全部使用 `a_stock` 直连 API。
+  —— `tradingagents/dataflows/alpha_vantage*.py` / `tradingagents/dataflows/yfinance_news.py`
+
+- **上游演示脚本与示例** —— `scripts/`（结构化输出烟雾测试）、`examples/`（三只股票案例数据）。
+  —— `scripts/` / `examples/`
+
+- **冗余文档与配置** —— `CLAUDE.md`（与 `AGENT.md` 重复）、`CHANGES_FROM_UPSTREAM.md`（内容已归档）、
+  `.streamlit/`（旧 UI 配置）、`docker-compose.yml`（引用已删除的 `web/app.py`）、
+  `backend/requirements.txt`（与 `pyproject.toml` 重复）。
+  
+- **旧前端模板文件** —— `frontend/README.md`（Vite 默认模板）、`frontend/src/hooks/use-analysis.ts`（已无导入者）。
+  
+- **构建产物** —— `tradingagents_astock.egg-info/`。
 
 ## [0.2.11] — 2026-05-30
 
