@@ -226,5 +226,12 @@ def route_to_vendor(method: str, *args, **kwargs):
             return impl_func(*args, **kwargs)
         except AlphaVantageRateLimitError:
             continue  # Only rate limits trigger fallback
+        except ValueError as e:
+            error_msg = str(e)
+            # If the error is about invalid ticker (Chinese name → code failure),
+            # return the message directly to the LLM so it can retry with a correct code.
+            if "无法识别" in error_msg or "找不到股票" in error_msg or "safe_ticker_component" in error_msg:
+                return f"[参数错误] {error_msg} 请使用正确的6位数字股票代码（如 600519）重试。"
+            raise
 
     raise RuntimeError(f"No available vendor for '{method}'")

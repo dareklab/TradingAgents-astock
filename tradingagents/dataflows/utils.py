@@ -35,8 +35,14 @@ def safe_ticker_component(value: str, *, max_len: int = 32) -> str:
         try:
             resolved = resolve_ticker(value)
         except ValueError as exc:
-            logger.warning("Could not resolve Chinese name %r: %s", value, exc)
-            raise  # re-raise — caller should see this as a tool-call error
+            logger.warning("Could not resolve Chinese name %r: %s — treating as non-stock name", value, exc)
+            # If the input is a concept/theme name like "人形机器人" that isn't a
+            # valid stock code or name, reject it so the data layer returns
+            # a graceful "no data" instead of crashing the analysis pipeline.
+            raise ValueError(
+                f"'{value}' 无法识别为股票代码或名称。"
+                f"请提供正确的6位股票代码（如 600519）或完整的A股名称。"
+            )
         logger.info("Auto-resolved Chinese ticker %r -> %s", value, resolved)
         value = resolved
 

@@ -61,6 +61,7 @@ def _normalize_ticker(symbol: str) -> str:
     """Strip exchange prefix/suffix, return pure 6-digit code.
 
     Handles: '688017', 'SH688017', '688017.SH', 'sh688017'
+    Falls back to safe_ticker_component for Chinese name resolution.
     """
     s = symbol.strip().upper()
     # Remove .SH / .SZ / .BJ suffix
@@ -73,7 +74,10 @@ def _normalize_ticker(symbol: str) -> str:
         if s.startswith(prefix):
             s = s[len(prefix) :]
             break
-    return safe_ticker_component(s)
+    try:
+        return safe_ticker_component(s)
+    except ValueError:
+        raise  # Let the caller (tool function) handle with a user-friendly message
 
 
 # ---------------------------------------------------------------------------

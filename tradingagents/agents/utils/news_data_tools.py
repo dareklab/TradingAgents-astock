@@ -18,7 +18,10 @@ def get_news(
     Returns:
         str: A formatted string containing news data
     """
-    return route_to_vendor("get_news", ticker, start_date, end_date)
+    try:
+        return route_to_vendor("get_news", ticker, start_date, end_date)
+    except ValueError as e:
+        return "[数据获取警告] get_news 参数错误: " + str(e) + "\n请使用正确的6位数字股票代码重试。"
 
 @tool
 def get_global_news(
