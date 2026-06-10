@@ -76,4 +76,5 @@ class AgentState(MessagesState):
         RiskDebateState, "Current state of the debate on evaluating risk"
     ]
     final_trade_decision: Annotated[str, "Final decision made by the Risk Analysts"]
+    rating: Annotated[str, "Extracted 5-tier rating (Buy/Overweight/Hold/Underweight/Sell) from Portfolio Manager"]
     past_context: Annotated[str, "Memory log context injected at run start (same-ticker decisions + cross-ticker lessons)"]

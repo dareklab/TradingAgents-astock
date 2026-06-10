@@ -343,7 +343,7 @@ def _run_analysis(task: AnalysisTask):
             task.update_progress(**progress_emit())
 
         # Analysis complete
-        signal = ta.process_signal(last_chunk.get("final_trade_decision", ""))
+        signal = ta.process_signal(last_chunk.get("rating", "") or last_chunk.get("final_trade_decision", ""))
         ta._log_state(trade_date, last_chunk)
         tracker.mark_complete(last_chunk, signal)
 
@@ -361,6 +361,7 @@ def _run_analysis(task: AnalysisTask):
             "state": _serialize_state(last_chunk),
             "display_name": display_name,
             "analysis_time": analysis_time,
+            "rating": last_chunk.get("rating", ""),
         }
         task.status = TASK_COMPLETE
         task.update_progress(display_name=display_name, **progress_emit())

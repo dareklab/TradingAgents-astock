@@ -51,8 +51,13 @@ def invoke_structured_or_freetext(
     prompt: Any,
     render: Callable[[T], str],
     agent_name: str,
-) -> str:
+    rating_extractor: Optional[Callable[[T], str]] = None,
+) -> str | tuple[str, str]:
     """Run the structured call and render to markdown; fall back to free-text on any failure.
+
+    When ``rating_extractor`` is provided, returns ``(rendered_markdown, rating)``
+    so the caller can store the rating directly without re-parsing the markdown.
+    Otherwise returns just the rendered markdown for backward compatibility.
 
     ``prompt`` is whatever the underlying LLM accepts (a string for chat
     invocations, a list of message dicts for chat models that take that
@@ -62,7 +67,10 @@ def invoke_structured_or_freetext(
     if structured_llm is not None:
         try:
             result = structured_llm.invoke(prompt)
-            return render(result)
+            rendered = render(result)
+            if rating_extractor is not None:
+                return rendered, rating_extractor(result)
+            return rendered
         except Exception as exc:
             logger.warning(
                 "%s: structured-output invocation failed (%s); retrying once as free text",
@@ -70,4 +78,6 @@ def invoke_structured_or_freetext(
             )
 
     response = plain_llm.invoke(prompt)
+    if rating_extractor is not None:
+        return response.content, ""
     return response.content

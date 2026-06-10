@@ -59,15 +59,26 @@ def load_analysis(path: str) -> dict[str, Any]:
 def extract_signal(state: dict[str, Any]) -> str:
     """Extract the short signal (Buy/Sell/Hold) from a final state dict.
 
-    Uses the shared 5-tier rating parser first (understands explicit rating
-    labels like ``评级：Sell`` / ``**Rating**: Overweight``), then falls
-    back to keyword search on the most authoritative fields.
+    Priority:
+    1. If a ``rating`` field exists in the saved JSON (v0.2.12+), use it directly.
+    2. Otherwise use the shared 5-tier rating parser on ``final_trade_decision``.
 
     Returns one of ``Buy`` / ``Sell`` / ``Hold``.
     """
+    # v0.2.12+: structured rating stored directly in the saved state
+    stored_rating = state.get("rating", "")
+    if stored_rating:
+        _FIVE_TO_THREE = {
+            "Buy": "Buy", "Overweight": "Buy",
+            "Sell": "Sell", "Underweight": "Sell",
+            "Hold": "Hold",
+        }
+        if stored_rating in _FIVE_TO_THREE:
+            return _FIVE_TO_THREE[stored_rating]
+
+    # Fallback for older saved files: parse from final_trade_decision text
     from tradingagents.agents.utils.rating import parse_rating
 
-    # 5→3 tier mapping
     _FIVE_TO_THREE = {
         "Buy": "Buy", "Overweight": "Buy",
         "Sell": "Sell", "Underweight": "Sell",
@@ -75,9 +86,9 @@ def extract_signal(state: dict[str, Any]) -> str:
     }
 
     for field in (
-        "investment_plan",
-        "trader_investment_decision",
         "final_trade_decision",
+        "trader_investment_decision",
+        "investment_plan",
     ):
         text = state.get(field, "")
         if not text:

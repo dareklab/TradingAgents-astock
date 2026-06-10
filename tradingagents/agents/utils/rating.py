@@ -28,7 +28,7 @@ _RATING_LABEL_RE = re.compile(r"rating.*?[:\-][\s*]*(\w+)", re.IGNORECASE)
 _CN_RATING_MAP = {"买入": "Buy", "增持": "Overweight", "持有": "Hold",
                   "减持": "Underweight", "卖出": "Sell"}
 _CN_RATING_LABEL_RE = re.compile(
-    r"(?:评级|最终评级|评级为)[：:]\s*\**\s*([^*\s]+)\**"
+    r"(?:评级|最终评级|评级为)[\s\*]*[：:][\s\*]*([^*\s]+)"
 )
 
 
@@ -60,13 +60,23 @@ def parse_rating(text: str, default: str = "Hold") -> str:
             if cn_word.lower() in _RATING_SET:
                 return cn_word.capitalize()
 
-    # 3) Fallback: last occurrence of any rating word (verdict comes last)
+    # 3) Fallback: find rating words that appear near decision keywords
+    #    to avoid picking up negated words like "严禁买入"
     text_lower = text.lower()
     best_pos = -1
     best_rating = default
+
     for rating in _RATING_SET:
         pos = text_lower.rfind(rating)
         if pos > best_pos:
+            # Check context: skip if preceded by negation nearby
+            ctx_start = max(0, pos - 12)
+            ctx = text_lower[ctx_start:pos].strip()
+            # Skip if word like "严禁", "不", "没有", "避免" precedes it
+            if any(neg in ctx for neg in ["严禁", "避免", "不建", "不推", "不适", "不赞",
+                                           "不要", "不会", "not re", "avoid", "do not",
+                                           "should not", "against"]):
+                continue
             best_pos = pos
             best_rating = rating.capitalize()
 
@@ -74,6 +84,12 @@ def parse_rating(text: str, default: str = "Hold") -> str:
     for cn, en in _CN_RATING_MAP.items():
         pos = text.rfind(cn)
         if pos > best_pos:
+            ctx_start = max(0, pos - 12)
+            ctx = text[ctx_start:pos].strip()
+            if any(neg in ctx for neg in ["严禁", "避免", "不建", "不推", "不适", "不赞",
+                                           "不要", "不会", "not re", "avoid", "do not",
+                                           "should not", "against"]):
+                continue
             best_pos = pos
             best_rating = en
 

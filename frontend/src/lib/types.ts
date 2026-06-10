@@ -45,6 +45,7 @@ export interface AnalysisResult {
   elapsed: number;
   display_name?: string;
   analysis_time?: string;
+  rating?: string;
   state: {
     company_of_interest: string;
     trade_date: string;
