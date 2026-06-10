@@ -88,20 +88,67 @@ class AnalysisTask:
 # ── Manager ─────────────────────────────────────────────────────────────────
 
 class TaskManager:
-    """Thread-safe manager for background analysis tasks.
+    """Thread-safe manager for background analysis tasks with a single-worker queue.
+
+    At most one task runs at a time. Additional tasks are queued as ``pending``
+    and auto-started when the current task completes.
 
     Usage::
 
         mgr = TaskManager()
-        task = mgr.submit("600519", "2026-06-09", config)
-        mgr.list_tasks()  # -> [task.to_dict(), ...]
-        mgr.cancel(task.id)
-        mgr.get_result(task.id)  # -> dict or None
+        task1 = mgr.submit("600519", "2026-06-09", config)  # starts immediately
+        task2 = mgr.submit("000858", "2026-06-09", config)  # queued as pending
+        mgr.list_tasks()  # -> [task1.to_dict(), task2.to_dict(), ...]
+        mgr.cancel(task1.id)
+        # task2 will auto-start after task1 is cancelled
     """
 
     def __init__(self):
         self._tasks: dict[str, AnalysisTask] = {}
         self._lock = threading.Lock()
+        self._worker_event = threading.Event()
+        self._worker_thread: threading.Thread | None = None
+        self._start_worker()
+
+    # ── Worker ─────────────────────────────────────────────────────────
+
+    def _start_worker(self):
+        """Start the daemon worker thread if not already running."""
+        if self._worker_thread is None or not self._worker_thread.is_alive():
+            self._worker_thread = threading.Thread(
+                target=self._worker_loop,
+                daemon=True,
+                name="task-worker",
+            )
+            self._worker_thread.start()
+
+    def _worker_loop(self):
+        """Main worker loop: pick one pending task, execute it, repeat."""
+        while True:
+            task = self._dequeue_next()
+            if task is None:
+                # No tasks — wait for a new one
+                self._worker_event.wait(timeout=5)
+                self._worker_event.clear()
+                continue
+
+            # Execute the task (blocking call)
+            _run_analysis(task)
+
+    def _dequeue_next(self) -> AnalysisTask | None:
+        """Return the oldest pending task, or None."""
+        with self._lock:
+            pending = [
+                t for t in self._tasks.values()
+                if t.status == TASK_PENDING and not t.cancel_requested
+            ]
+            if not pending:
+                return None
+            # FIFO: oldest creation time first
+            pending.sort(key=lambda t: t.created_at)
+            task = pending[0]
+            task.status = TASK_RUNNING
+            return task
 
     # ── Public API ──────────────────────────────────────────────────────
 
@@ -112,13 +159,14 @@ class TaskManager:
         config: dict[str, Any],
         display_name: str = "",
     ) -> AnalysisTask:
-        """Create a new task and start it in a background thread."""
+        """Add a new task to the queue. Starts immediately if nothing is running."""
         task_id = uuid.uuid4().hex[:12]
         task = AnalysisTask(
             id=task_id,
             ticker=ticker,
             trade_date=trade_date,
             config=config,
+            status=TASK_PENDING,
         )
         if display_name:
             task.update_progress(display_name=display_name)
@@ -126,14 +174,9 @@ class TaskManager:
         with self._lock:
             self._tasks[task_id] = task
 
-        # Start in a daemon thread so it doesn't block server shutdown
-        task.thread = threading.Thread(
-            target=_run_analysis,
-            args=(task,),
-            daemon=True,
-        )
-        task.status = TASK_RUNNING
-        task.thread.start()
+        # Wake the worker
+        self._worker_event.set()
+        self._start_worker()
 
         return task
 

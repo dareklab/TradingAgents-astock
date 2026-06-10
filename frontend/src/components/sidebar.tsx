@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Collapsible } from "@/components/ui/collapsible";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { resolveTicker, getHistory, getModels } from "@/lib/api";
+import { resolveTicker, resolveTickerWithName, getHistory, getModels, type TaskInfo } from "@/lib/api";
 import type { HistoryEntry, ModelCatalog, AnalysisConfig } from "@/lib/types";
 import { PROVIDERS } from "@/lib/types";
 
@@ -48,12 +48,14 @@ function GroupedDate({ dateLabel, count, children }: { dateLabel: string; count:
 
 interface SidebarProps {
   isRunning: boolean;
-  onStartAnalysis: (config: AnalysisConfig) => void;
+  tasks: TaskInfo[];
+  onStartMultiple: (tickers: string[], config: Omit<AnalysisConfig, 'ticker'>) => void;
   onStopAnalysis: () => void;
   onLoadHistory: (path: string) => void;
+  onCancelTask: (taskId: string) => void;
 }
 
-export default function Sidebar({ isRunning, onStartAnalysis, onStopAnalysis, onLoadHistory }: SidebarProps) {
+export default function Sidebar({ isRunning, tasks, onStartMultiple, onStopAnalysis, onLoadHistory, onCancelTask }: SidebarProps) {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const [tickerInput, setTickerInput] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -67,9 +69,11 @@ export default function Sidebar({ isRunning, onStartAnalysis, onStopAnalysis, on
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [resolving, setResolving] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   const loadHistoryData = useCallback(() => {
-    getHistory().then(h => setHistory(h)).catch(() => {});
+    setIsLoadingHistory(true);
+    getHistory().then(h => setHistory(h)).catch(() => {}).finally(() => setIsLoadingHistory(false));
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -82,6 +86,8 @@ export default function Sidebar({ isRunning, onStartAnalysis, onStopAnalysis, on
   }, []);
 
   useEffect(() => { loadHistoryData(); }, [loadHistoryData]);
+
+
 
   useEffect(() => {
     getModels(provider).then(m => {
@@ -97,39 +103,46 @@ export default function Sidebar({ isRunning, onStartAnalysis, onStopAnalysis, on
     });
   }, [provider]);
 
-  const startImmediately = useCallback(() => {
-    if (!tickerInput.trim()) return;
-    // Clear right side immediately with a placeholder
-    onStartAnalysis({
-      ticker: tickerInput.trim(),
-      tradeDate,
-      llmProvider: provider,
-      quickThinkLlm: quickModel,
-      deepThinkLlm: deepModel,
-      baseUrl: baseUrl || undefined,
-    });
-  }, [tickerInput, tradeDate, provider, quickModel, deepModel, baseUrl, onStartAnalysis]);
+  const baseConfig = useCallback(() => ({
+    tradeDate,
+    llmProvider: provider,
+    quickThinkLlm: quickModel,
+    deepThinkLlm: deepModel,
+    baseUrl: baseUrl || undefined,
+  }), [tradeDate, provider, quickModel, deepModel, baseUrl]);
+
+  const getTickers = useCallback((): string[] => {
+    return tickerInput
+      .split(/[,，\n\s]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }, [tickerInput]);
 
   const handleStart = useCallback(async () => {
-    if (!tickerInput.trim()) return;
+    const tickers = getTickers();
+    if (tickers.length === 0) return;
     setError(""); setSuccessMsg(""); setResolving(true);
-    // Clear right side immediately
-    startImmediately();
     try {
-      const code = await resolveTicker(tickerInput.trim());
-      setSuccessMsg(tickerInput.trim() !== code ? `${tickerInput.trim()} → ${code}` : code);
-      onStartAnalysis({
-        ticker: code,
-        tradeDate,
-        llmProvider: provider,
-        quickThinkLlm: quickModel,
-        deepThinkLlm: deepModel,
-        baseUrl: baseUrl || undefined,
-      });
+      // Resolve all tickers sequentially
+      const resolved: { code: string; name: string }[] = [];
+      for (const raw of tickers) {
+        try {
+          const { code, displayName } = await resolveTickerWithName(raw);
+          resolved.push({ code, name: displayName || code });
+        } catch {
+          setError(`无法识别: ${raw}`);
+          setResolving(false);
+          return;
+        }
+      }
+      const codes = resolved.map(r => r.code);
+      const names = resolved.map(r => r.name).join(", ");
+      setSuccessMsg(names.length > 20 ? `${codes.length} 只股票` : names);
+      onStartMultiple(codes, baseConfig());
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "股票解析失败");
+      setError(e instanceof Error ? e.message : "解析失败");
     } finally { setResolving(false); }
-  }, [tickerInput, tradeDate, provider, quickModel, deepModel, baseUrl, onStartAnalysis, startImmediately]);
+  }, [getTickers, baseConfig, onStartMultiple]);
 
   return (
     <div className="flex h-full flex-col bg-[#0d0d0d] border-r border-[#1a1a1a]">
@@ -152,10 +165,10 @@ export default function Sidebar({ isRunning, onStartAnalysis, onStopAnalysis, on
 
         <div className="space-y-2.5">
           <Input
-            placeholder="股票代码或名称"
+            placeholder="股票代码，多只用逗号分隔"
             value={tickerInput}
             onChange={e => { setTickerInput(e.target.value); setError(""); setSuccessMsg(""); }}
-            onKeyDown={e => { if (e.key === "Enter" && tickerInput.trim() && !isRunning && !resolving) { setError(""); setSuccessMsg(""); setResolving(true); startImmediately(); } }}
+            onKeyDown={e => { if (e.key === "Enter" && tickerInput.trim() && !resolving) { handleStart(); } }}
             disabled={isRunning || resolving}
           />
 
@@ -232,7 +245,7 @@ export default function Sidebar({ isRunning, onStartAnalysis, onStopAnalysis, on
       <div className="flex-1 overflow-y-auto px-4 py-3">
         <div className="flex items-center justify-between mb-2.5">
           <h4 className="text-xs font-semibold text-[#888] tracking-wider uppercase">历史记录</h4>
-          <button onClick={handleRefresh} disabled={isRefreshing} className="text-[#555] hover:text-[#ff5a1f] transition-colors text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">刷新</button>
+          <button onClick={handleRefresh} disabled={isRefreshing} className="text-[#555] hover:text-[#ff5a1f] transition-colors text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">{isRefreshing || isLoadingHistory ? "加载中…" : "刷新"}</button>
         </div>
         {history.length === 0 ? (
           <p className="text-xs text-[#444]">暂无历史记录</p>
@@ -283,6 +296,49 @@ export default function Sidebar({ isRunning, onStartAnalysis, onStopAnalysis, on
           </div>
         )}
       </div>
+
+      {/* Task Queue */}
+      {tasks.length > 0 && (
+        <div className="px-4 py-3 border-t border-[#1a1a1a]">
+          <div className="flex items-center justify-between mb-2.5">
+            <h4 className="text-xs font-semibold text-[#888] tracking-wider uppercase">任务队列</h4>
+            <span className="text-[10px] text-[#555]">
+              {tasks.filter(t => t.status === "running").length} 运行中
+              · {tasks.filter(t => t.status === "pending").length} 排队中
+            </span>
+          </div>
+          <div className="space-y-1">
+            {tasks.map(t => {
+              const statusIcon = t.status === "running" ? "🔄" :
+                t.status === "pending" ? "⏳" :
+                t.status === "complete" ? "✅" :
+                t.status === "error" ? "❌" : "⏹️";
+              const statusText = t.status === "running" ? "分析中" :
+                t.status === "pending" ? "排队中" :
+                t.status === "complete" ? "已完成" :
+                t.status === "error" ? "失败" : "已取消";
+              return (
+                <div key={t.id}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs bg-[#0a0a0a] border border-[#1a1a1a]"
+                >
+                  <span className="flex-shrink-0">{statusIcon}</span>
+                  <span className="flex-1 truncate text-[#e8e6e1] font-medium">{t.displayName || t.ticker}</span>
+                  <span className="text-[10px] text-[#555] flex-shrink-0">{statusText}</span>
+                  {(t.status === "running" || t.status === "pending") && (
+                    <button
+                      onClick={() => onCancelTask(t.id)}
+                      className="text-[#444] hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
+                      title="取消任务"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mx-4 h-px bg-[#1a1a1a]" />
       <div className="px-4 py-2.5 text-[9px] text-[#333] text-center leading-relaxed">
