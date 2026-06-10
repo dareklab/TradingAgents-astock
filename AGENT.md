@@ -50,11 +50,9 @@ tradingagents/
 ├── graph/              # LangGraph 流程编排
 └── llm_clients/        # LLM 客户端工厂
 
-web/                    # Streamlit Web UI
 cli/                    # Typer CLI 入口
 tests/                  # 测试
-examples/               # 示例
-scripts/                # 工具脚本
+backend/                # FastAPI 后端 API
 ```
 
 ---
@@ -91,12 +89,7 @@ scripts/                # 工具脚本
 - **东财限流 `_em_get()`**: 所有东财请求串行化（默认 1.0s 间隔，环境变量 `EM_MIN_INTERVAL` 可调）+ 随机抖动，防止批量分析时封 IP
 - **`_normalize_ticker`**: 统一处理 `SH688017` / `688017.SH` / `sh688017` 等格式变体
 
-### 3.4 可选 Vendor
 
-| 模块 | 文件群 | 作用 |
-|------|--------|------|
-| Alpha Vantage | `alpha_vantage*.py` (5 文件) | 美股/全球市场 K线、指标、基本面、新闻 |
-| YFinance | `y_finance.py`, `yfinance_news.py` | 美股/全球市场 K线、指标、基本面、内部人交易、新闻 |
 
 ---
 
@@ -230,34 +223,11 @@ START → [Market → Social → News → Fundamentals → Policy → Hot_Money 
 | `model_catalog.py` | 各供应商模型选项列表（`MODEL_OPTIONS`） |
 | `validators.py` | API Key / 模型校验 |
 
----
 
-## 七、Web UI: `web/`
-
-| 文件 | 作用 |
-|------|------|
-| `launch.py` | `subprocess.run("streamlit run app.py")` 启动入口 |
-| `app.py` (398行) | **主页面**：4 种状态(空闲/加载中/运行中/完成)、自定义深色 CSS 主题(暗黑+橙色强调) |
-| `sidebar.py` | 股票输入 → `resolve_ticker` 解析、日期选择、LLM 供应商/模型选择、历史记录列表 |
-| `report_viewer.py` | 报告渲染：标签页(Ticker / 分析报告 / 最终决策 / 日志/JSON) |
-| `progress_panel.py` | 进度面板：阶段状态指示器、进度条、停止按钮、LLM/工具/Tokens 统计、数据健康 |
-| `runner.py` | 后台线程执行 + 流式检测完成阶段 → 填充 ProgressTracker |
-| `progress.py` | `ProgressTracker` — 线程安全的状态追踪器(15 个阶段) |
-| `history.py` | 扫描 `~/.tradingagents/logs/` → 加载历史 JSON → `parse_rating` 提取信号 |
-| `pdf_export.py` | PDF 导出 |
-
-### Web UI 状态机
-
-```
-空闲(欢迎界面)
-  → 点击"开始分析" → placeholder(2s 加载动画)
-  → 运行中(rerun 轮询进度面板, 2s间隔)
-  → 完成(报告渲染) / 错误(显示错误原因) / 中止(用户停止)
-```
 
 ---
 
-## 八、CLI: `cli/`
+## 七、CLI: `cli/`
 
 | 文件 | 作用 |
 |------|------|
@@ -269,7 +239,7 @@ START → [Market → Social → News → Fundamentals → Policy → Hot_Money 
 
 ---
 
-## 九、配置系统
+## 八、配置系统
 
 `tradingagents/default_config.py` 定义 `DEFAULT_CONFIG`：
 
@@ -289,7 +259,7 @@ START → [Market → Social → News → Fundamentals → Policy → Hot_Money 
 
 ---
 
-## 十、测试: `tests/`
+## 九、测试: `tests/`
 
 | 文件 | 测试内容 |
 |------|---------|
@@ -305,7 +275,7 @@ START → [Market → Social → News → Fundamentals → Policy → Hot_Money 
 
 ---
 
-## 十一、已知问题与注意事项
+## 十、已知问题与注意事项
 
 ### 依赖冲突
 - mootdx 锁死 `httpx==0.25.2`，与 `langchain-google-genai` 的 `httpx>=0.28.1` 冲突
@@ -328,7 +298,7 @@ START → [Market → Social → News → Fundamentals → Policy → Hot_Money 
 
 ---
 
-## 十二、相关项目
+## 十一、相关项目
 
 - [a-stock-data](https://github.com/simonlin1212/a-stock-data) — A 股 MCP 数据服务
 - [TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents) — 上游原版框架

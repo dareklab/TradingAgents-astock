@@ -14,7 +14,7 @@
   <a href="https://github.com/simonlin1212/tradingagents-astock/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/simonlin1212/tradingagents-astock?style=social"/></a>
   <a href="https://arxiv.org/abs/2412.20138"><img alt="论文" src="https://img.shields.io/badge/论文-arXiv_2412.20138-B31B1B?logo=arxiv"/></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue"/></a>
-  <a href="./CHANGES_FROM_UPSTREAM.md"><img alt="改动记录" src="https://img.shields.io/badge/改动记录-CHANGES-orange"/></a>
+  
 </p>
 
 ---
@@ -237,36 +237,23 @@ tradingagents --help     # 查看所有选项
 
 ## Web UI
 
-内置 Streamlit 可视化界面，支持在侧边栏选择 LLM 供应商和模型，输入股票代码即可一键分析，适合不写代码的用户。
+内置 React 前端界面，支持在侧边栏选择 LLM 供应商和模型，输入股票代码即可一键分析，支持多任务队列排队运行。
 
 ### 本地启动
 
 ```bash
-# 方式一：命令行启动（推荐）
-tradingagents-web
+# 方式一：一键启动（推荐）
+bash dev.sh
 
-# 方式二：直接运行
-streamlit run web/app.py
+# 方式二：分别启动
+# 后端
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+# 前端（新开终端）
+cd frontend && npm run dev
 ```
 
-### Docker容器启动
-```bash
-# 启动 Web
-docker compose up web -d
-
-# 重新构建
-docker compose build web
-
-# 查看日志
-docker compose logs web -f
-
-# 重启/停止
-docker compose restart web
-docker compose stop web
-
-```
-
-打开浏览器访问 `http://localhost:8501`。
+打开浏览器访问 `http://localhost:5173`（前端），后端 API 文档 `http://localhost:8000/docs`。
 
 ### 功能
 
@@ -333,19 +320,25 @@ TradingAgents-Astock/
 │       ├── propagation.py     # 状态初始化与传播
 │       ├── reflection.py      # 交易反思（CSI 300 基准）
 │       └── conditional_logic.py
-├── web/
-│   ├── app.py                 # Streamlit 主入口
-│   ├── runner.py              # 后台线程运行分析
-│   ├── progress.py            # 线程安全进度追踪
+├── backend/
+│   ├── main.py                # FastAPI 后端入口
+│   ├── task_manager.py        # 后台任务队列
 │   ├── history.py             # 历史记录扫描
-│   ├── pdf_export.py          # PDF 报告生成
-│   ├── launch.py              # CLI 启动器
-│   └── components/            # UI 组件
-│       ├── sidebar.py         # 侧边栏（输入 + 历史）
-│       ├── progress_panel.py  # 实时进度面板
-│       └── report_viewer.py   # 报告展示
+│   ├── progress.py            # 线程安全进度追踪
+│   └── pdf_export.py          # PDF 报告生成
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx            # 主页面
+│   │   ├── components/        # React 组件
+│   │   │   ├── sidebar.tsx    # 侧边栏
+│   │   │   ├── progress-panel.tsx
+│   │   │   ├── report-viewer.tsx
+│   │   │   └── loading-screen.tsx
+│   │   └── lib/
+│   │       ├── api.ts         # API 调用
+│   │       └── types.ts       # TypeScript 类型
+│   └── vite.config.ts         # Vite 配置
 ├── test_astock.py             # E2E 集成测试
-├── CHANGES_FROM_UPSTREAM.md   # 与上游的完整改动记录
 ├── NOTICE                     # Apache 2.0 归属声明
 ├── LICENSE                    # Apache 2.0 许可证
 └── pyproject.toml             # 包定义与依赖

@@ -27,7 +27,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.dataflows.a_stock import resolve_ticker, get_stock_display_name
 from tradingagents.dataflows.trading_calendar import resolve_analysis_date
 from tradingagents.llm_clients.model_catalog import MODEL_OPTIONS
-from web.history import get_history, load_analysis, extract_signal
+from backend.history import get_history, load_analysis, extract_signal
 # ── Initialize mootdx server (A-stock data gateway) ──────────────────────────
 def _init_mootdx():
     """Ensure mootdx has a valid BESTIP config. Required for stock name→code resolution."""
@@ -212,7 +212,7 @@ async def api_export_pdf(req: LoadHistoryRequest):
         ticker = Path(req.path).parent.parent.name
         trade_date = Path(req.path).stem.replace("full_states_log_", "")
         signal = extract_signal(state)
-        from web.pdf_export import generate_pdf
+        from backend.pdf_export import generate_pdf
         import traceback as _tb, sys as _sys
         try:
             pdf_bytes = generate_pdf(state, ticker, trade_date, signal)

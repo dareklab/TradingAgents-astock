@@ -247,7 +247,7 @@ def _run_analysis(task: AnalysisTask):
     This function runs in a daemon thread and updates ``task`` state
     as it progresses.
     """
-    from web.progress import ProgressTracker, PIPELINE_STAGES, STAGE_IDS
+    from backend.progress import ProgressTracker, PIPELINE_STAGES, STAGE_IDS
     from cli.stats_handler import StatsCallbackHandler
     from tradingagents.dataflows.a_stock import resolve_ticker, get_stock_display_name
     from tradingagents.dataflows.trading_calendar import resolve_analysis_date
