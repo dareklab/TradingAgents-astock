@@ -33,15 +33,36 @@ function formatTime(seconds: number) {
 }
 
 export default function ProgressPanel({ progress, displayName }: Props) {
+  const isInitializing = progress.currentStage === "initializing";
   const completed = progress.completedStages.length;
   const total = PIPELINE_STAGES.length;
-  const pct = total > 0 ? completed / total : 0;
+  const pct = !isInitializing && total > 0 ? completed / total : 0;
 
   const stageStatus = (id: string): "done" | "active" | "pending" => {
     if (progress.completedStages.includes(id)) return "done";
     if (progress.currentStage === id) return "active";
     return "pending";
   };
+
+  if (isInitializing) {
+    return (
+      <div className="py-8 animate-fadeIn">
+        <div className="text-center mb-8">
+          <div className="text-2xl text-[#f0ede8] font-bold tracking-tight mb-2">{displayName} 分析中…</div>
+        </div>
+        <div className="text-center py-16">
+          <div className="relative w-14 h-14 mx-auto mb-5">
+            <div className="absolute inset-0 rounded-full border-2 border-[#222]" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#ff5a1f] animate-spin" />
+            <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-[#ff8c42] animate-spin" style={{ animationDuration: "0.6s", animationDirection: "reverse" }} />
+          </div>
+          <div className="text-base text-[#888] animate-pulse">正在初始化分析环境…</div>
+          <div className="text-sm text-[#555] mt-2">加载数据源、连接 LLM 服务</div>
+          <div className="text-xs text-[#444] mt-6">{formatTime(progress.elapsed || 0)}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="py-8 animate-fadeIn">

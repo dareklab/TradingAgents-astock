@@ -187,8 +187,13 @@ class TaskManager:
             config=config,
             status=TASK_PENDING,
         )
-        if display_name:
-            task.update_progress(display_name=display_name)
+        task.update_progress(
+            display_name=display_name or ticker,
+            currentStage="initializing",
+            completedStages=[],
+            llmCalls=0, toolCalls=0, tokensIn=0, tokensOut=0,
+            elapsed=0,
+        )
 
         with self._lock:
             self._tasks[task_id] = task
