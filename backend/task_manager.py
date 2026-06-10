@@ -309,8 +309,12 @@ def _run_analysis(task: AnalysisTask):
         tracker.is_running = True
         last_chunk: dict = {}
 
-        # Push initial progress
-        task.update_progress(**progress_emit())
+        # Set display_name early so the UI can show it during analysis
+        try:
+            dn = get_stock_display_name(task.ticker)
+        except Exception:
+            dn = task.ticker
+        task.update_progress(display_name=dn, **progress_emit())
 
         # Execute the graph
         for chunk in ta.graph.stream(init_state, **args):

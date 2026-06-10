@@ -39,7 +39,7 @@ function MarkdownContent({ text }: { text: string }) {
   const html = useMemo(() => renderMarkdown(stripThink(text)), [text]);
   return (
     <div
-      className="prose-content text-sm leading-relaxed"
+      className="prose-content text-[15px] leading-relaxed"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
@@ -71,16 +71,16 @@ export default function ReportViewer({ result, historyPath }: Props) {
         <div className="relative px-6 py-5 flex items-center gap-5">
           {/* Signal */}
           <div className="flex-shrink-0">
-            <div className="text-[11px] text-[#555] tracking-[0.15em] mb-0.5 font-semibold">交易信号</div>
+            <div className="text-sm text-[#555] tracking-[0.15em] mb-0.5 font-semibold">交易信号</div>
             <div className="text-4xl font-bold tracking-tight" style={{ color: sc.color }}>{signal.toUpperCase()}</div>
           </div>
           <div className="w-px h-12 bg-[#222]" />
           {/* Info */}
           <div className="flex-1 text-center">
-            <div className="text-lg font-semibold text-[#f0ede8]">
+            <div className="text-xl font-semibold text-[#f0ede8]">
               {result.display_name || result.ticker}
             </div>
-            <div className="text-sm text-[#777] mt-1">
+            <div className="text-base text-[#777] mt-1">
               分析时间：{result.analysis_time || state.trade_date}
               {elapsed > 0 && <span className="ml-4 text-[#555]">耗时 {elapsedStr}</span>}
             </div>
@@ -108,7 +108,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
                 alert("PDF 生成失败，请使用 Markdown 导出。");
               }
             }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111] border border-[#222] text-[11px] text-[#666] hover:text-[#f0ede8] hover:border-[#444] transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111] border border-[#222] text-sm text-[#666] hover:text-[#f0ede8] hover:border-[#444] transition-all cursor-pointer"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
             下载 PDF
@@ -123,7 +123,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
             a.href = url; a.download = `${result.display_name || result.ticker}-${state.trade_date.replace(/-/g, "")}.md`;
             a.click(); URL.revokeObjectURL(url);
           }}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111] border border-[#222] text-[11px] text-[#666] hover:text-[#f0ede8] hover:border-[#444] transition-all cursor-pointer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111] border border-[#222] text-sm text-[#666] hover:text-[#f0ede8] hover:border-[#444] transition-all cursor-pointer"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
           下载 Markdown
@@ -135,7 +135,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
         <div className="p-5 rounded-lg bg-[#0d0d0d] border border-[#222]">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-base">👔</span>
-            <h2 className="text-base font-bold text-[#f0ede8] tracking-tight">最终投资建议</h2>
+            <h2 className="text-lg font-bold text-[#f0ede8] tracking-tight">最终投资建议</h2>
           </div>
           <div className="pl-7">
             <MarkdownContent text={state.investment_plan} />
@@ -147,7 +147,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
       <div>
         <div className="flex items-center gap-2 mb-3">
           <span className="text-base">📊</span>
-          <h2 className="text-base font-bold text-[#f0ede8] tracking-tight">分析师报告</h2>
+          <h2 className="text-lg font-bold text-[#f0ede8] tracking-tight">分析师报告</h2>
         </div>
         <div className="space-y-1.5">
           {ANALYST_SECTIONS.map(([key, icon, title]) => {
@@ -169,7 +169,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-base">⚔️</span>
-            <h2 className="text-base font-bold text-[#f0ede8] tracking-tight">多空辩论</h2>
+            <h2 className="text-lg font-bold text-[#f0ede8] tracking-tight">多空辩论</h2>
           </div>
           <Tabs value={debateTab} onValueChange={setDebateTab}>
             <TabsList>
@@ -210,7 +210,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-base">🛡️</span>
-            <h2 className="text-base font-bold text-[#f0ede8] tracking-tight">风控评估</h2>
+            <h2 className="text-lg font-bold text-[#f0ede8] tracking-tight">风控评估</h2>
           </div>
           <Tabs value={riskTab} onValueChange={setRiskTab}>
             <TabsList>
@@ -227,7 +227,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
                 <TabsContent key={k} value={k}>
                   <div className="bg-[#0d0d0d] rounded-lg p-4 border border-[#222]">
                     {isEnPanel && (
-                      <div className="mb-3 text-[10px] text-[#555] px-2.5 py-1 rounded bg-[#151515] border border-[#222] inline-block">
+                      <div className="mb-3 text-xs text-[#555] px-2.5 py-1 rounded bg-[#151515] border border-[#222] inline-block">
                         🌐 AI 原始分析（英文）
                       </div>
                     )}
@@ -244,7 +244,7 @@ export default function ReportViewer({ result, historyPath }: Props) {
       {state.data_quality_summary && (
         <div>
           <Collapsible title="✅ 数据质量" className="mb-0">
-            <div className="text-sm text-[#888] leading-relaxed">
+            <div className="text-base text-[#888] leading-relaxed">
               <MarkdownContent text={state.data_quality_summary} />
             </div>
           </Collapsible>

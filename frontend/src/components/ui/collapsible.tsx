@@ -15,7 +15,7 @@ function Collapsible({ title, children, defaultOpen = false, className }: Collap
     <div className={cn("rounded-xl border border-[#222] bg-[#0d0d0d] overflow-hidden transition-all duration-200", className)}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between px-4 py-3 text-xs font-medium text-[#888] hover:text-[#f0ede8] transition-colors cursor-pointer"
+        className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-[#888] hover:text-[#f0ede8] transition-colors cursor-pointer"
       >
         <span>{title}</span>
         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", open && "rotate-180")} />
