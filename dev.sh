@@ -10,22 +10,60 @@ for port in 8000 5173; do
     pid=$(lsof -ti:"$port" 2>/dev/null) && kill "$pid" 2>/dev/null && echo "  Freed port $port (PID $pid)"
 done
 
-# Detect the correct Python (prefer Homebrew over system default)
+# Detect the correct Python (prefer Homebrew over system default, require >=3.10)
 PYTHON=""
-for candidate in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
+for candidate in \
+    /opt/homebrew/bin/python3 \
+    /opt/homebrew/bin/python3.14 \
+    /opt/homebrew/bin/python3.13 \
+    /opt/homebrew/bin/python3.12 \
+    /opt/homebrew/bin/python3.11 \
+    /usr/local/bin/python3.14 \
+    /usr/local/bin/python3.13 \
+    /usr/local/bin/python3.12 \
+    /usr/local/bin/python3.11 \
+    /usr/local/bin/python3 \
+    /usr/bin/python3; do
     if [ -x "$candidate" ]; then
-        if "$candidate" -c "import fastapi" 2>/dev/null; then
-            PYTHON="$candidate"
-            break
+        # Check Python version >= 3.10
+        VER=$("$candidate" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+        MAJOR=$(echo "$VER" | cut -d. -f1)
+        MINOR=$(echo "$VER" | cut -d. -f2)
+        if [ "$MAJOR" -ge 3 ] && [ "$MINOR" -ge 10 ] 2>/dev/null; then
+            if "$candidate" -c "import fastapi" 2>/dev/null; then
+                PYTHON="$candidate"
+                break
+            elif [ -z "$PYTHON" ]; then
+                # Remember this candidate even if fastapi not yet installed
+                PYTHON="$candidate"
+            fi
         fi
     fi
 done
 
-# Fallback: try to find any python3 that has fastapi
+# Fallback: try to find any python3 >= 3.10
 if [ -z "$PYTHON" ]; then
-    PYTHON=$(command -v python3)
-    echo "⚠️  fastapi not found in default Python. Installing dependencies..."
-    "$PYTHON" -m pip install -e . 2>&1 | tail -1
+    for candidate in $(command -v python3.14 python3.13 python3.12 python3.11 python3 2>/dev/null); do
+        VER=$("$candidate" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+        MAJOR=$(echo "$VER" | cut -d. -f1)
+        MINOR=$(echo "$VER" | cut -d. -f2)
+        if [ "$MAJOR" -ge 3 ] && [ "$MINOR" -ge 10 ] 2>/dev/null; then
+            PYTHON="$candidate"
+            break
+        fi
+    done
+fi
+
+if [ -z "$PYTHON" ]; then
+    echo "❌  No Python >= 3.10 found. Please install Python 3.10+ via Homebrew:"
+    echo "    brew install python@3.11"
+    exit 1
+fi
+
+# Ensure fastapi is available; install project deps if needed
+if ! "$PYTHON" -c "import fastapi" 2>/dev/null; then
+    echo "⚠️  fastapi not found in $PYTHON. Installing project dependencies..."
+    "$PYTHON" -m pip install -e . 2>&1 | tail -5
 fi
 
 PIP="$PYTHON -m pip"
@@ -47,13 +85,29 @@ print('configured' if hq else 'empty')
 " 2>/dev/null)
   if [ "$BESTIP" = "empty" ]; then
     echo "  → Config exists but BESTIP empty, running bestip (may take 30s)..."
-    timeout 30 "$PYTHON" -m mootdx bestip 2>&1 | tail -1
+    "$PYTHON" -c "
+import subprocess, sys
+try:
+    subprocess.run([sys.executable, '-m', 'mootdx', 'bestip'], timeout=30)
+except subprocess.TimeoutExpired:
+    print('bestip timed out after 30s, continuing anyway...')
+except Exception as e:
+    print(f'bestip failed: {e}')
+" 2>&1 | tail -1
   else
     echo "  ✓ mootdx already configured"
   fi
 else
   echo "  → No config found, running bestip..."
-  timeout 30 "$PYTHON" -m mootdx bestip 2>&1 | tail -1
+  "$PYTHON" -c "
+import subprocess, sys
+try:
+    subprocess.run([sys.executable, '-m', 'mootdx', 'bestip'], timeout=30)
+except subprocess.TimeoutExpired:
+    print('bestip timed out after 30s, continuing anyway...')
+except Exception as e:
+    print(f'bestip failed: {e}')
+" 2>&1 | tail -1
 fi
 
 # 2. Start backend API
