@@ -178,7 +178,14 @@ export default function App() {
         }
       } catch {}
     }
-    setState(prev => prev.type === "idle" ? { type: "loading", target: "analysis" } : prev);
+    // Only switch view and reset progress when starting fresh from idle
+    setState(prev => {
+      if (prev.type === "idle") {
+        setProgress(null);
+        return { type: "loading", target: "analysis" };
+      }
+      return prev;
+    });
     for (const ticker of tickers) {
       try {
         console.log('[TASK] submitting:', ticker);
