@@ -219,3 +219,5 @@ __marimo__/
 tradingagents_astock.egg-info
 .diag_touch
 node_modules/
+
+.tradingagents/
