@@ -61,47 +61,73 @@ def extract_signal(state: dict[str, Any]) -> str:
 
     Priority:
     1. If a ``rating`` field is a non-empty known value, use it directly.
-    2. For empty-string rating or missing rating, parse from final_trade_decision
-       or other decision fields using keyword matching (Chinese & English).
+    2. Otherwise, use the TradingAgents rating parser on final_trade_decision
+       and other decision fields, picking the **last** occurring rating keyword
+       (typically the verdict).
     3. Fallback: ``N/A``.
 
     Returns one of ``Buy`` / ``Sell`` / ``Hold``.
     """
-    _FIVE_TO_THREE = {
-        "Buy": "Buy", "Overweight": "Buy",
-        "Sell": "Sell", "Underweight": "Sell",
-        "Hold": "Hold",
-    }
-
     # Priority 1: stored rating that is a known value
     stored_rating = state.get("rating", "")
-    if stored_rating and stored_rating in _FIVE_TO_THREE:
-        return _FIVE_TO_THREE[stored_rating]
+    if stored_rating:
+        # Normalise 5-tier → 3-tier
+        s = stored_rating.lower()
+        if s in ("buy", "overweight"):
+            return "Buy"
+        if s in ("sell", "underweight"):
+            return "Sell"
+        if s == "hold":
+            return "Hold"
 
-    # Priority 2: parse the first ~500 chars of each decision field for a rating pattern.
-    # This avoids false matches from general discussion (e.g. "大股东增持").
-    # Prefer "减持"/"卖出" over "增持"/"买入" when both appear, since
-    # a cautious rating (减持) is more actionable than incidental mentions.
-    _TEXT_SIGNALS: list[tuple[list[str], str]] = [
-        (["减持", "卖出", "Sell", "Underweight"], "Sell"),
-        (["增持", "买入", "Buy", "Overweight"], "Buy"),
-        (["持有", "持仓", "观望", "Hold"], "Hold"),
-    ]
+    # Priority 2: scan decision fields for the last occurrence of any rating keyword.
+    # Uses the same "last occurrence wins" strategy as parse_rating in rating.py.
+    # Search order: final_trade_decision (most authoritative) -> trader -> investment_plan
+    _CN_MAP = {"买入": "Buy", "增持": "Buy",
+               "持有": "Hold", "持仓": "Hold", "观望": "Hold",
+               "减持": "Sell", "卖出": "Sell"}
+    _EN_RATINGS = ["buy", "overweight", "hold", "underweight", "sell"]
+
+    best_pos = -1
+    best_signal = "N/A"
 
     for field in (
         "final_trade_decision",
         "trader_investment_decision",
-        "rating",          # in case rating is a Chinese text like "增持"
+        "trader_investment_plan",
         "investment_plan",
     ):
         text = state.get(field, "")
         if not text:
             continue
-        # Only check first 500 chars where the rating/decision is usually stated
-        text = text[:500]
-        for keywords, signal in _TEXT_SIGNALS:
-            for kw in keywords:
-                if kw in text:
-                    return signal
+        text_lower = text.lower()
+        text_full = text  # keep original for Chinese keyword search
 
-    return "N/A"
+        # Check Chinese keywords first (more specific)
+        for cn, en in _CN_MAP.items():
+            pos = text_full.rfind(cn)
+            if pos > best_pos:
+                # Skip if preceded by negation nearby
+                ctx_start = max(0, pos - 12)
+                ctx = text_full[ctx_start:pos].strip()
+                if any(neg in ctx for neg in ["严禁", "避免", "不建", "不推",
+                                               "不要", "不会", "not re"]):
+                    continue
+                best_pos = pos
+                best_signal = en
+
+        # Check English rating keywords
+        for rating in _EN_RATINGS:
+            pos = text_lower.rfind(rating)
+            if pos > best_pos:
+                ctx_start = max(0, pos - 12)
+                ctx = text_lower[ctx_start:pos].strip()
+                if any(neg in ctx for neg in ["avoid", "do not", "should not",
+                                               "against", "not re"]):
+                    continue
+                best_pos = pos
+                best_signal = "Buy" if rating in ("buy", "overweight") else (
+                    "Sell" if rating in ("sell", "underweight") else "Hold"
+                )
+
+    return best_signal

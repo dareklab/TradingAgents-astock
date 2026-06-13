@@ -46,10 +46,17 @@ def get_language_instruction() -> str:
 
 def build_instrument_context(ticker: str) -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
+    # Try to get the current stock display name so the LLM uses the correct name
+    try:
+        from tradingagents.dataflows.a_stock import get_stock_display_name as _gsdn
+        _display = _gsdn(ticker)
+    except Exception:
+        _display = ticker
     return (
-        f"The instrument to analyze is `{ticker}`. "
-        "Use this exact ticker in every tool call, report, and recommendation, "
-        "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`)."
+        f"The instrument to analyze is `{ticker}` (current name: {_display}). "
+        "Use this exact ticker in every tool call, report, and recommendation. "
+        "Always use the current name (after the ticker in parentheses) as the company name in reports, "
+        "not historical names."
     )
 
 def create_msg_delete():

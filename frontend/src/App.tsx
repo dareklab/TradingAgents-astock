@@ -33,7 +33,7 @@ export default function App() {
   const [completedResults, setCompletedResults] = useState<Record<string, AnalysisResult>>({});
 
   // Poll task list only when there are active tasks
-  const [shouldPoll, setShouldPoll] = useState(false);
+  const [shouldPoll, setShouldPoll] = useState(true);
   useEffect(() => {
     const hasActive = tasks.some(t => t.status === "running" || t.status === "pending");
     setShouldPoll(hasActive);

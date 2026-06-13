@@ -35,7 +35,7 @@ def safe_ticker_component(value: str, *, max_len: int = 32) -> str:
         try:
             resolved = resolve_ticker(value)
         except ValueError as exc:
-            logger.warning("Could not resolve Chinese name %r: %s — treating as non-stock name", value, exc)
+            logger.info("Could not resolve Chinese name %r: %s — treating as non-stock name", value, exc)
             # If the input is a concept/theme name like "人形机器人" that isn't a
             # valid stock code or name, reject it so the data layer returns
             # a graceful "no data" instead of crashing the analysis pipeline.

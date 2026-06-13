@@ -64,6 +64,34 @@ def _init_mootdx():
 _init_mootdx()
 logger = logging.getLogger(__name__)
 
+# ── Logging to file ───────────────────────────────────────────────────
+_LOG_DIR = _PROJECT_ROOT / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+_file_handler = logging.FileHandler(
+    _LOG_DIR / "tradingagents.log",
+    encoding="utf-8",
+    mode="a",
+)
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(
+    logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
+# Remove default handlers and add file + console
+_root_logger = logging.getLogger()
+_root_logger.setLevel(logging.DEBUG)
+# Only add file handler if not already configured (avoid duplicates on reload)
+if not any(isinstance(h, logging.FileHandler) and h.baseFilename.endswith("tradingagents.log") for h in _root_logger.handlers):
+    _root_logger.addHandler(_file_handler)
+    # Also keep stderr for docker/terminal
+    _console = logging.StreamHandler()
+    _console.setLevel(logging.INFO)
+    _console.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    _root_logger.addHandler(_console)
+
 
 
 

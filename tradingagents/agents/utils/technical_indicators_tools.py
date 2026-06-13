@@ -1,6 +1,10 @@
+import re
 from langchain_core.tools import tool
 from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
+
+
+_ASTOCK_CODE_RE = re.compile(r'^(SH|SZ)?\d{6}(\.(SS|SZ))?$')
 
 @tool
 def get_indicators(
@@ -20,6 +24,13 @@ def get_indicators(
     Returns:
         str: A formatted dataframe containing the technical indicators for the specified stock code and indicator.
     """
+    # Validate symbol is a numeric stock code, not a Chinese concept name
+    if not _ASTOCK_CODE_RE.match(symbol.strip().upper()):
+        if any('\u4e00' <= ch <= '\u9fff' for ch in symbol):
+            raise ValueError(
+                f"[get_indicators] 参数错误: '{symbol}' 不是股票代码，而是中文名称或概念题材。"
+                f"请使用6位数字股票代码（如 600519），不要传入中文名称。"
+            )
     # LLMs sometimes pass multiple indicators as a comma-separated string;
     # split and process each individually.
     indicators = [i.strip().lower() for i in indicator.split(",") if i.strip()]

@@ -1,4 +1,8 @@
+import logging
+
 from typing import Annotated
+
+logger = logging.getLogger(__name__)
 
 # Import from vendor-specific modules
 from .y_finance import (
@@ -227,7 +231,7 @@ def route_to_vendor(method: str, *args, **kwargs):
         if vendor not in fallback_vendors:
             fallback_vendors.append(vendor)
 
-    for vendor in fallback_vendors:
+    for idx, vendor in enumerate(fallback_vendors):
         if vendor not in VENDOR_METHODS[method]:
             continue
 
@@ -235,15 +239,30 @@ def route_to_vendor(method: str, *args, **kwargs):
         impl_func = vendor_impl[0] if isinstance(vendor_impl, list) else vendor_impl
 
         try:
-            return impl_func(*args, **kwargs)
+            result = impl_func(*args, **kwargs)
+            if idx > 0:
+                logger.info(
+                    "[VENDOR SWITCH] %s: primary vendor failed, using %s (attempt %d/%d)",
+                    method, vendor, idx + 1, len(fallback_vendors),
+                )
+            logger.debug("[VENDOR OK] %s <- %s", method, vendor)
+            return result
         except AlphaVantageRateLimitError:
-            continue  # Only rate limits trigger fallback
+            logger.warning(
+                "[VENDOR FAIL] %s: %s rate limited, trying next...",
+                method, vendor,
+            )
+            continue
         except ValueError as e:
             error_msg = str(e)
             # If the error is about invalid ticker (Chinese name → code failure),
             # return the message directly to the LLM so it can retry with a correct code.
             if "无法识别" in error_msg or "找不到股票" in error_msg or "safe_ticker_component" in error_msg:
                 return f"[参数错误] {error_msg} 请使用正确的6位数字股票代码（如 600519）重试。"
+            logger.warning(
+                "[VENDOR FAIL] %s: %s failed (%s), trying next...",
+                method, vendor, error_msg[:80],
+            )
             raise
 
     raise RuntimeError(f"No available vendor for '{method}'")

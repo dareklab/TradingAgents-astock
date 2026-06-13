@@ -107,6 +107,15 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
                 "output is unavailable. Agent factories fall back to "
                 "free-text generation automatically."
             )
+        # DeepSeek V4 (deepseek-v4-*) has thinking mode enabled by default,
+        # which does not support tool_choice. Catch it here so we skip
+        # structured output at bind time, avoiding a wasted API call + retry.
+        if self.model_name.startswith("deepseek-v4"):
+            raise NotImplementedError(
+                f"{self.model_name} thinking mode does not support "
+                "tool_choice; structured output is unavailable. "
+                "Agent factories fall back to free-text generation automatically."
+            )
         if _is_minimax_thinking(self.model_name):
             raise NotImplementedError(
                 f"{self.model_name} thinking mode does not support "

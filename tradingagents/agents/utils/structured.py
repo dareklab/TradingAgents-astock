@@ -45,6 +45,43 @@ def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]
         return None
 
 
+def _extract_rating_from_text(text: str) -> str:
+    """Parse a 5-tier rating from free-text output using the same heuristic
+    as extract_signal and parse_rating, so ``state["rating"]`` is populated
+    even when structured output is unavailable.
+    """
+    # English ratings (last occurrence wins)
+    _RATINGS = {"buy": "Buy", "overweight": "Overweight", "hold": "Hold",
+                "underweight": "Underweight", "sell": "Sell"}
+    text_lower = text.lower()
+    best_pos = -1
+    best = ""
+    for eng, canonical in _RATINGS.items():
+        pos = text_lower.rfind(eng)
+        if pos > best_pos:
+            # Skip if preceded by negation
+            ctx = text_lower[max(0, pos - 12):pos].strip()
+            if any(neg in ctx for neg in ["avoid", "do not", "should not",
+                                           "against", "not re", "no "]):
+                continue
+            best_pos = pos
+            best = canonical
+
+    # Chinese ratings
+    _CN = {"买入": "Buy", "增持": "Overweight", "持有": "Hold",
+           "减持": "Underweight", "卖出": "Sell"}
+    for cn, canonical in _CN.items():
+        pos = text.rfind(cn)
+        if pos > best_pos:
+            ctx = text[max(0, pos - 12):pos].strip()
+            if any(neg in ctx for neg in ["严禁", "避免", "不建", "不推",
+                                           "不要", "不会", "not re"]):
+                continue
+            best_pos = pos
+            best = canonical
+    return best
+
+
 def invoke_structured_or_freetext(
     structured_llm: Optional[Any],
     plain_llm: Any,
@@ -59,10 +96,9 @@ def invoke_structured_or_freetext(
     so the caller can store the rating directly without re-parsing the markdown.
     Otherwise returns just the rendered markdown for backward compatibility.
 
-    ``prompt`` is whatever the underlying LLM accepts (a string for chat
-    invocations, a list of message dicts for chat models that take that
-    shape). The same value is forwarded to the free-text path so the
-    fallback sees the same input the structured call did.
+    On free-text fallback, the rating is extracted heuristically from the
+    response text so ``state["rating"]`` is populated even when structured
+    output is unavailable (e.g. DeepSeek V4 thinking mode).
     """
     if structured_llm is not None:
         try:
@@ -79,5 +115,6 @@ def invoke_structured_or_freetext(
 
     response = plain_llm.invoke(prompt)
     if rating_extractor is not None:
-        return response.content, ""
+        rating = _extract_rating_from_text(response.content)
+        return response.content, rating
     return response.content

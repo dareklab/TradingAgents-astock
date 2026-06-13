@@ -1,6 +1,10 @@
+import re
 from langchain_core.tools import tool
 from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
+
+
+_ASTOCK_CODE_RE = re.compile(r'^(SH|SZ)?\d{6}(\.(SS|SZ))?$')
 
 
 @tool
@@ -17,6 +21,7 @@ def get_fundamentals(
     Returns:
         str: A formatted report containing comprehensive fundamental data
     """
+    ticker = _validate_astock_code(ticker, "get_fundamentals")
     return route_to_vendor("get_fundamentals", ticker, curr_date)
 
 
@@ -36,6 +41,7 @@ def get_balance_sheet(
     Returns:
         str: A formatted report containing balance sheet data
     """
+    ticker = _validate_astock_code(ticker, "get_balance_sheet")
     return route_to_vendor("get_balance_sheet", ticker, freq, curr_date)
 
 
@@ -55,6 +61,7 @@ def get_cashflow(
     Returns:
         str: A formatted report containing cash flow statement data
     """
+    ticker = _validate_astock_code(ticker, "get_cashflow")
     return route_to_vendor("get_cashflow", ticker, freq, curr_date)
 
 
@@ -74,4 +81,5 @@ def get_income_statement(
     Returns:
         str: A formatted report containing income statement data
     """
+    ticker = _validate_astock_code(ticker, "get_income_statement")
     return route_to_vendor("get_income_statement", ticker, freq, curr_date)
