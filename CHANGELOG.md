@@ -43,6 +43,17 @@ Breaking changes within the 0.x line are called out explicitly.
 
 - **概念名称日志噪音** — `Could not resolve Chinese name` 从 WARNING 降为 INFO。
   —— `tradingagents/dataflows/utils.py`
+### Fixed
+
+- **评级提取全路径统一** — 5 个不同函数（`parse_rating` / `_extract_rating_from_text` /
+  `extract_signal` / `process_signal` / `SignalProcessor.process_signal`）各有一套独立的
+  评级解析逻辑，导致对同一份 LLM 输出返回不同结果（如 `"Buy"` vs `"Sell"`）。
+  修复后全部统一委托给 `rating.py:parse_rating`，消除不一致。
+  —— `tradingagents/agents/utils/structured.py` / `backend/history.py`
+
+- **历史文件 rating 修复** — 之前 bug 写入的错误 `rating` 字段已通过脚本重算修正。
+  —— `~/.tradingagents/logs/000920/...json`
+
 
 ### Changed
 

@@ -117,18 +117,33 @@ export default function App() {
   const prevRunningIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const runningIds = new Set(tasks.filter(t => t.status === "running").map(t => t.id));
+    const hasAnyRunning = runningIds.size > 0;
+    const wasRunning = prevRunningIdsRef.current.size > 0;
+    prevRunningIdsRef.current = runningIds;
+
     // Detect transition: was running → now nothing running
-    if (prevRunningIdsRef.current.size > 0 && runningIds.size === 0 && !hasPending) {
-      // Auto-switch to the latest completed result
+    if (wasRunning && !hasAnyRunning && !hasPending) {
       const latest = findLatestCompleted(tasks);
-      if (latest && completedResults[latest.id]) {
-        setState({ type: "complete", result: completedResults[latest.id] });
+      if (latest) {
+        // Try cached result first, otherwise fetch it
+        const cached = completedResults[latest.id];
+        if (cached) {
+          setState({ type: "complete", result: cached });
+        } else {
+          // Fetch result and switch when ready
+          getTaskResult(latest.id).then(res => {
+            if (res.status === "complete" && res.result) {
+              const result = res.result as AnalysisResult;
+              setCompletedResults(prev => ({ ...prev, [latest.id]: result }));
+              setState({ type: "complete", result });
+            }
+          }).catch(() => {});
+        }
       }
-      // Refresh sidebar history
+      // Refresh sidebar history regardless
       setHistoryRefreshCounter(c => c + 1);
     }
-    prevRunningIdsRef.current = runningIds;
-  }, [tasks, completedResults, hasPending]);
+  }, [tasks, hasPending]);
 
   const historyPathRef = useRef<string>("");
 

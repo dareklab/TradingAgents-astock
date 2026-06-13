@@ -46,40 +46,14 @@ def bind_structured(llm: Any, schema: type[T], agent_name: str) -> Optional[Any]
 
 
 def _extract_rating_from_text(text: str) -> str:
-    """Parse a 5-tier rating from free-text output using the same heuristic
-    as extract_signal and parse_rating, so ``state["rating"]`` is populated
-    even when structured output is unavailable.
-    """
-    # English ratings (last occurrence wins)
-    _RATINGS = {"buy": "Buy", "overweight": "Overweight", "hold": "Hold",
-                "underweight": "Underweight", "sell": "Sell"}
-    text_lower = text.lower()
-    best_pos = -1
-    best = ""
-    for eng, canonical in _RATINGS.items():
-        pos = text_lower.rfind(eng)
-        if pos > best_pos:
-            # Skip if preceded by negation
-            ctx = text_lower[max(0, pos - 12):pos].strip()
-            if any(neg in ctx for neg in ["avoid", "do not", "should not",
-                                           "against", "not re", "no "]):
-                continue
-            best_pos = pos
-            best = canonical
+    """Parse a 5-tier rating from free-text output.
 
-    # Chinese ratings
-    _CN = {"买入": "Buy", "增持": "Overweight", "持有": "Hold",
-           "减持": "Underweight", "卖出": "Sell"}
-    for cn, canonical in _CN.items():
-        pos = text.rfind(cn)
-        if pos > best_pos:
-            ctx = text[max(0, pos - 12):pos].strip()
-            if any(neg in ctx for neg in ["严禁", "避免", "不建", "不推",
-                                           "不要", "不会", "not re"]):
-                continue
-            best_pos = pos
-            best = canonical
-    return best
+    Delegates to ``parse_rating`` from ``tradingagents.agents.utils.rating``
+    to keep the heuristic consistent across all call sites (same negation
+    detection, same Chinese/English keyword matching, same priority ordering).
+    """
+    from tradingagents.agents.utils.rating import parse_rating
+    return parse_rating(text)
 
 
 def invoke_structured_or_freetext(

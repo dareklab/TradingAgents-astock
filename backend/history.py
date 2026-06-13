@@ -59,19 +59,22 @@ def load_analysis(path: str) -> dict[str, Any]:
 def extract_signal(state: dict[str, Any]) -> str:
     """Extract the short signal (Buy/Sell/Hold) from a final state dict.
 
+    Delegates to ``tradingagents.agents.utils.rating.parse_rating`` for all
+    text-based extraction, keeping the heuristic consistent across the entire
+    codebase.  This function only adds the post-5-tier→3-tier normalisation
+    that history display needs.
+
     Priority:
     1. If a ``rating`` field is a non-empty known value, use it directly.
-    2. Otherwise, use the TradingAgents rating parser on final_trade_decision
-       and other decision fields, picking the **last** occurring rating keyword
-       (typically the verdict).
-    3. Fallback: ``N/A``.
+    2. Otherwise, delegate to ``parse_rating`` on ``final_trade_decision``.
+    3. Still no hit? Try ``trader_investment_plan`` / ``investment_plan``.
+    4. Fallback: ``N/A``.
 
     Returns one of ``Buy`` / ``Sell`` / ``Hold``.
     """
-    # Priority 1: stored rating that is a known value
+    # Priority 1: stored 5-tier rating
     stored_rating = state.get("rating", "")
     if stored_rating:
-        # Normalise 5-tier → 3-tier
         s = stored_rating.lower()
         if s in ("buy", "overweight"):
             return "Buy"
@@ -80,54 +83,19 @@ def extract_signal(state: dict[str, Any]) -> str:
         if s == "hold":
             return "Hold"
 
-    # Priority 2: scan decision fields for the last occurrence of any rating keyword.
-    # Uses the same "last occurrence wins" strategy as parse_rating in rating.py.
-    # Search order: final_trade_decision (most authoritative) -> trader -> investment_plan
-    _CN_MAP = {"买入": "Buy", "增持": "Buy",
-               "持有": "Hold", "持仓": "Hold", "观望": "Hold",
-               "减持": "Sell", "卖出": "Sell"}
-    _EN_RATINGS = ["buy", "overweight", "hold", "underweight", "sell"]
+    # Priority 2: delegate to parse_rating for full text-based extraction
+    from tradingagents.agents.utils.rating import parse_rating
 
-    best_pos = -1
-    best_signal = "N/A"
-
-    for field in (
-        "final_trade_decision",
-        "trader_investment_decision",
-        "trader_investment_plan",
-        "investment_plan",
-    ):
+    for field in ("final_trade_decision", "trader_investment_plan", "investment_plan"):
         text = state.get(field, "")
         if not text:
             continue
-        text_lower = text.lower()
-        text_full = text  # keep original for Chinese keyword search
+        parsed = parse_rating(text)
+        if parsed in ("Buy", "Overweight"):
+            return "Buy"
+        if parsed in ("Sell", "Underweight"):
+            return "Sell"
+        if parsed == "Hold":
+            return "Hold"
 
-        # Check Chinese keywords first (more specific)
-        for cn, en in _CN_MAP.items():
-            pos = text_full.rfind(cn)
-            if pos > best_pos:
-                # Skip if preceded by negation nearby
-                ctx_start = max(0, pos - 12)
-                ctx = text_full[ctx_start:pos].strip()
-                if any(neg in ctx for neg in ["严禁", "避免", "不建", "不推",
-                                               "不要", "不会", "not re"]):
-                    continue
-                best_pos = pos
-                best_signal = en
-
-        # Check English rating keywords
-        for rating in _EN_RATINGS:
-            pos = text_lower.rfind(rating)
-            if pos > best_pos:
-                ctx_start = max(0, pos - 12)
-                ctx = text_lower[ctx_start:pos].strip()
-                if any(neg in ctx for neg in ["avoid", "do not", "should not",
-                                               "against", "not re"]):
-                    continue
-                best_pos = pos
-                best_signal = "Buy" if rating in ("buy", "overweight") else (
-                    "Sell" if rating in ("sell", "underweight") else "Hold"
-                )
-
-    return best_signal
+    return "N/A"
