@@ -6,6 +6,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [0.2.13] — 2026-06-13
+
+### Added
+
+- **A 股代码工具校验** — 所有股票数据工具（`get_stock_data` / `get_indicators` /
+  `get_fundamentals` / `get_balance_sheet` / `get_cashflow` / `get_income_statement` /
+  `get_news` / `get_insider_transactions` / `get_profit_forecast` / `get_concept_blocks` /
+  `get_fund_flow` / `get_dragon_tiger_board` / `get_lockup_expiry` /
+  `get_industry_comparison`）入口处增加 `validate_astock_code` 校验，
+  拒绝中文概念名称（如"教育信息化""新质生产力"），并返回明确中文错误提示供 LLM 纠正。
+  —— `tradingagents/agents/utils/ticker_validation.py`（新增） / `*_tools.py`（5 个文件）
+
+- **vendor 切换日志** — `route_to_vendor` 在数据源切换时打印 `[VENDOR SWITCH]`
+  及成功来源 `[VENDOR OK]`、失败原因 `[VENDOR FAIL]` 日志。
+  —— `tradingagents/dataflows/interface.py`
+
+- **free-text 评级提取** — Structured output 不可用时（DeepSeek V4 thinking 等），
+  从 free-text 输出中启发式提取 5 级评级，确保 `state["rating"]` 正确填充。
+  —— `tradingagents/agents/utils/structured.py`
+
+- **文件日志** — 所有日志同时输出到 `logs/tradingagents.log`（DEBUG 级别）。
+  —— `backend/main.py`
+
+### Fixed
+
+- **信号提取偏向卖出** — `extract_signal` 旧逻辑优先匹配"减持/卖出"，改为"最后出现优先"
+  策略（与 `parse_rating` 一致）。
+  —— `backend/history.py`
+
+- **DeepSeek V4 thinking 模型跳过 structured output** — V4 系列 thinking 模式不支持
+  `tool_choice`，提前 raise `NotImplementedError` 避免 API 400 错误。
+  —— `tradingagents/llm_clients/openai_client.py`
+
+- **前端轮询不启动** — `shouldPoll` 初始值 `false` 导致页面加载后从不轮询任务列表。
+  改为初始 `true`。
+  —— `frontend/src/App.tsx`
+
+- **概念名称降级日志** — `Could not resolve Chinese name` 从 WARNING 降为 INFO。
+  —— `tradingagents/dataflows/utils.py`
+
+### Changed
+
+- **`build_instrument_context` 增加当前股票名称** — 向 LLM 传递当前名称（如"三维化学(002469)"），
+  指示其使用最新名称而非历史名称。
+  —— `tradingagents/agents/utils/agent_utils.py`
 ## [0.2.12] — 2026-06-10
 
 ### Added
