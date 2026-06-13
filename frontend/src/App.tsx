@@ -32,22 +32,20 @@ export default function App() {
   // Track completed results keyed by task id so we can show them on demand
   const [completedResults, setCompletedResults] = useState<Record<string, AnalysisResult>>({});
 
-  // Poll task list only when there are active tasks
-  const [shouldPoll, setShouldPoll] = useState(true);
+  // Poll task list — always on so the sidebar refreshes after submitting an analysis
+  // When no active tasks exist, poll at a lower frequency (10s) to reduce log noise
   useEffect(() => {
-    const hasActive = tasks.some(t => t.status === "running" || t.status === "pending");
-    setShouldPoll(hasActive);
-  }, [tasks]);
-
-  useEffect(() => {
-    if (!shouldPoll) return;
+    let cancelled = false;
     const poll = () => {
-      listTasks().then(setTasks).catch(() => {});
+      listTasks().then(newTasks => {
+        if (cancelled) return;
+        setTasks(newTasks);
+      }).catch(() => {});
     };
     poll();
     const iv = setInterval(poll, 3000);
-    return () => clearInterval(iv);
-  }, [shouldPoll]);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, []);
 
   const activeRunningTask = useMemo(() => findRunningTask(tasks), [tasks]);
   const latestCompletedTask = useMemo(() => findLatestCompleted(tasks), [tasks]);

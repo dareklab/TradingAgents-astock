@@ -10,46 +10,44 @@ Breaking changes within the 0.x line are called out explicitly.
 
 ### Added
 
-- **A 股代码工具校验** — 所有股票数据工具（`get_stock_data` / `get_indicators` /
-  `get_fundamentals` / `get_balance_sheet` / `get_cashflow` / `get_income_statement` /
-  `get_news` / `get_insider_transactions` / `get_profit_forecast` / `get_concept_blocks` /
-  `get_fund_flow` / `get_dragon_tiger_board` / `get_lockup_expiry` /
-  `get_industry_comparison`）入口处增加 `validate_astock_code` 校验，
-  拒绝中文概念名称（如"教育信息化""新质生产力"），并返回明确中文错误提示供 LLM 纠正。
-  —— `tradingagents/agents/utils/ticker_validation.py`（新增） / `*_tools.py`（5 个文件）
+- **A 股代码工具校验** — 所有股票数据工具入口处增加 `validate_astock_code` 校验，
+  拒绝中文概念名称（如"教育信息化""新质生产力"），返回明确中文错误提示供 LLM 纠正。
+  新增独立模块 `ticker_validation.py` 避免循环导入。
+  —— `tradingagents/agents/utils/ticker_validation.py`（新增） / `*_tools.py`（5 文件）
 
-- **vendor 切换日志** — `route_to_vendor` 在数据源切换时打印 `[VENDOR SWITCH]`
-  及成功来源 `[VENDOR OK]`、失败原因 `[VENDOR FAIL]` 日志。
+- **vendor 切换日志** — `route_to_vendor` 在数据源切换时打印 `[VENDOR SWITCH]`（INFO）、
+  成功来源 `[VENDOR OK]`（DEBUG）、失败原因 `[VENDOR FAIL]`（WARNING）。
   —— `tradingagents/dataflows/interface.py`
 
 - **free-text 评级提取** — Structured output 不可用时（DeepSeek V4 thinking 等），
   从 free-text 输出中启发式提取 5 级评级，确保 `state["rating"]` 正确填充。
   —— `tradingagents/agents/utils/structured.py`
 
-- **文件日志** — 所有日志同时输出到 `logs/tradingagents.log`（DEBUG 级别）。
+- **文件日志** — 所有日志同时输出到 `logs/tradingagents.log`（DEBUG 级别，含时间戳）。
+  终端 stderr 日志也增加时间戳。
   —— `backend/main.py`
 
 ### Fixed
+
+- **前端轮询永久关闭** — `shouldPoll` 逻辑过于复杂，初始 `tasks=[]` 时 `hasActive=false`
+  导致轮询被永久关闭，提交分析后任务栏不显示。简化为始终轮询。
+  —— `frontend/src/App.tsx`
 
 - **信号提取偏向卖出** — `extract_signal` 旧逻辑优先匹配"减持/卖出"，改为"最后出现优先"
   策略（与 `parse_rating` 一致）。
   —— `backend/history.py`
 
-- **DeepSeek V4 thinking 模型跳过 structured output** — V4 系列 thinking 模式不支持
-  `tool_choice`，提前 raise `NotImplementedError` 避免 API 400 错误。
+- **DeepSeek V4 thinking 跳过 structured output** — V4 系列 thinking 模式不支持
+  `tool_choice`，提前 raise `NotImplementedError` 避免 API 400 错误及 WARNING 日志。
   —— `tradingagents/llm_clients/openai_client.py`
 
-- **前端轮询不启动** — `shouldPoll` 初始值 `false` 导致页面加载后从不轮询任务列表。
-  改为初始 `true`。
-  —— `frontend/src/App.tsx`
-
-- **概念名称降级日志** — `Could not resolve Chinese name` 从 WARNING 降为 INFO。
+- **概念名称日志噪音** — `Could not resolve Chinese name` 从 WARNING 降为 INFO。
   —— `tradingagents/dataflows/utils.py`
 
 ### Changed
 
 - **`build_instrument_context` 增加当前股票名称** — 向 LLM 传递当前名称（如"三维化学(002469)"），
-  指示其使用最新名称而非历史名称。
+  指示使用最新名称而非历史名称。
   —— `tradingagents/agents/utils/agent_utils.py`
 ## [0.2.12] — 2026-06-10
 
