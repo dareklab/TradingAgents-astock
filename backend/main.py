@@ -89,7 +89,7 @@ if not any(isinstance(h, logging.FileHandler) and h.baseFilename.endswith("tradi
     # Also keep stderr for docker/terminal
     _console = logging.StreamHandler()
     _console.setLevel(logging.INFO)
-    _console.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    _console.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
     _root_logger.addHandler(_console)
 
 

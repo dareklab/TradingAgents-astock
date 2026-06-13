@@ -1,10 +1,9 @@
-import re
 from langchain_core.tools import tool
 from typing import Annotated
 from tradingagents.dataflows.interface import route_to_vendor
+from tradingagents.agents.utils.ticker_validation import validate_astock_code
 
 
-_ASTOCK_CODE_RE = re.compile(r'^(SH|SZ)?\d{6}(\.(SS|SZ))?$')
 
 
 @tool
@@ -20,7 +19,7 @@ def get_profit_forecast(
     Returns:
         str: Consensus forecast report with valuation metrics
     """
-    ticker = _validate_astock_code(ticker, "get_profit_forecast")
+    ticker = validate_astock_code(ticker, "get_profit_forecast")
     return route_to_vendor("get_profit_forecast", ticker)
 
 
@@ -76,7 +75,7 @@ def get_concept_blocks(
     Returns:
         str: Concept and sector block membership with daily changes
     """
-    ticker = _validate_astock_code(ticker, "get_concept_blocks")
+    ticker = validate_astock_code(ticker, "get_concept_blocks")
     return route_to_vendor("get_concept_blocks", ticker)
 
 
@@ -100,7 +99,7 @@ def get_fund_flow(
     Returns:
         str: Fund flow report with main force signal
     """
-    ticker = _validate_astock_code(ticker, "get_fund_flow")
+    ticker = validate_astock_code(ticker, "get_fund_flow")
     return route_to_vendor("get_fund_flow", ticker, curr_date, include_history)
 
 
@@ -121,7 +120,7 @@ def get_dragon_tiger_board(
     Returns:
         str: LHB appearances with seat details and institutional activity
     """
-    ticker = _validate_astock_code(ticker, "get_dragon_tiger_board")
+    ticker = validate_astock_code(ticker, "get_dragon_tiger_board")
     return route_to_vendor("get_dragon_tiger_board", ticker, curr_date, look_back_days)
 
 
@@ -142,7 +141,7 @@ def get_lockup_expiry(
     Returns:
         str: Lockup expiry schedule with impact assessment
     """
-    ticker = _validate_astock_code(ticker, "get_lockup_expiry")
+    ticker = validate_astock_code(ticker, "get_lockup_expiry")
     return route_to_vendor("get_lockup_expiry", ticker, curr_date, forward_days)
 
 
@@ -161,5 +160,5 @@ def get_industry_comparison(
     Returns:
         str: Industry performance ranking with key metrics
     """
-    ticker = _validate_astock_code(ticker, "get_industry_comparison")
+    ticker = validate_astock_code(ticker, "get_industry_comparison")
     return route_to_vendor("get_industry_comparison", ticker, curr_date)
