@@ -11,10 +11,9 @@ type AppState =
   | { type: "idle" }
   | { type: "loading"; target: "history" | "analysis" }
   | { type: "running"; taskId: string }
-  | { type: "complete"; result: AnalysisResult; taskId?: string }
+  | { type: "complete"; result: AnalysisResult }
   | { type: "error"; message: string };
 
-// ── Helpers ────────────────────────────────────────────────────────
 function findRunningTask(tasks: TaskInfo[]): TaskInfo | undefined {
   return tasks.find(t => t.status === "running");
 }
@@ -27,50 +26,52 @@ function findLatestCompleted(tasks: TaskInfo[]): TaskInfo | undefined {
 
 export default function App() {
   const [state, setState] = useState<AppState>({ type: "idle" });
-
-  // Poll task list periodically
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
+  const [historyRefreshCounter, setHistoryRefreshCounter] = useState(0);
+
+  // Track completed results keyed by task id so we can show them on demand
+  const [completedResults, setCompletedResults] = useState<Record<string, AnalysisResult>>({});
+
+  // Poll task list only when there are active tasks
+  const [shouldPoll, setShouldPoll] = useState(false);
   useEffect(() => {
+    const hasActive = tasks.some(t => t.status === "running" || t.status === "pending");
+    setShouldPoll(hasActive);
+  }, [tasks]);
+
+  useEffect(() => {
+    if (!shouldPoll) return;
     const poll = () => {
       listTasks().then(setTasks).catch(() => {});
     };
     poll();
     const iv = setInterval(poll, 3000);
     return () => clearInterval(iv);
-  }, []);
+  }, [shouldPoll]);
 
-  // Result and error (set from completed tasks)
-  const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Derive state from the polled task list
   const activeRunningTask = useMemo(() => findRunningTask(tasks), [tasks]);
   const latestCompletedTask = useMemo(() => findLatestCompleted(tasks), [tasks]);
   const hasPending = useMemo(() => tasks.some(t => t.status === "pending"), [tasks]);
 
-  // Display name for currently running task
   const [displayName, setDisplayName] = useState("");
 
-  // When a running task appears, switch to progress view
-  useEffect(() => {
-    if (activeRunningTask) {
-      // Only overwrite displayName if not already resolved by handleStartMultiple
-      setDisplayName(prev => prev || activeRunningTask.displayName || activeRunningTask.ticker);
-      setState({ type: "running", taskId: activeRunningTask.id });
-    } else if (hasPending) {
-      setState({ type: "loading", target: "analysis" });
-    } else if (!activeRunningTask && tasks.length === 0 && state.type !== "complete" && state.type !== "error") {
-      setState({ type: "idle" });
-    }
-  }, [activeRunningTask, hasPending]);
-
-  // Poll the active running task for detailed progress
+  // ── Progress polling (always on when a running task exists) ──
   const [progress, setProgress] = useState<ProgressState | null>(null);
+
+  // Keep progress polling alive regardless of the current view
+  const prevRunningIdRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!activeRunningTask) {
-      setProgress(null);
+      if (prevRunningIdRef.current) {
+        setProgress(null);
+        prevRunningIdRef.current = undefined;
+      }
       return;
     }
+    prevRunningIdRef.current = activeRunningTask.id;
+
+    setDisplayName(prev => prev || activeRunningTask.displayName || activeRunningTask.ticker);
+
     let cancelled = false;
     const poll = async () => {
       try {
@@ -96,47 +97,56 @@ export default function App() {
     return () => { cancelled = true; clearInterval(iv); };
   }, [activeRunningTask?.id]);
 
-  // Watch for completion — when running task finishes and a completed task appears
-  const prevLatestCompletedIdRef = useRef<string | undefined>(undefined);
+  // ── Auto-collect completed results ──
+  const prevCompleteIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (latestCompletedTask && !activeRunningTask && !hasPending && state.type !== "complete" && state.type !== "error") {
-      // Avoid re-fetching the same completed task
-      if (prevLatestCompletedIdRef.current === latestCompletedTask.id) return;
-      prevLatestCompletedIdRef.current = latestCompletedTask.id;
-
-      getTaskResult(latestCompletedTask.id).then(res => {
+    const completedTasks = tasks.filter(t => t.status === "complete");
+    for (const t of completedTasks) {
+      if (prevCompleteIdsRef.current.has(t.id)) continue;
+      prevCompleteIdsRef.current.add(t.id);
+      getTaskResult(t.id).then(res => {
         if (res.status === "complete" && res.result) {
-          setResult(res.result as AnalysisResult);
-          setState({ type: "complete", result: res.result as AnalysisResult, taskId: latestCompletedTask.id });
-        } else if (res.status === "error") {
-          setError(res.error || "分析失败");
-          setState({ type: "error", message: res.error || "分析失败" });
+          setCompletedResults(prev => ({
+            ...prev,
+            [t.id]: res.result as AnalysisResult,
+          }));
         }
       }).catch(() => {});
     }
-  }, [latestCompletedTask, activeRunningTask, hasPending, state.type]);
+  }, [tasks]);
 
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  // ── Auto-complete: when all running tasks finish → auto-show result + refresh history ──
+  const prevRunningIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const runningIds = new Set(tasks.filter(t => t.status === "running").map(t => t.id));
+    // Detect transition: was running → now nothing running
+    if (prevRunningIdsRef.current.size > 0 && runningIds.size === 0 && !hasPending) {
+      // Auto-switch to the latest completed result
+      const latest = findLatestCompleted(tasks);
+      if (latest && completedResults[latest.id]) {
+        setState({ type: "complete", result: completedResults[latest.id] });
+      }
+      // Refresh sidebar history
+      setHistoryRefreshCounter(c => c + 1);
+    }
+    prevRunningIdsRef.current = runningIds;
+  }, [tasks, completedResults, hasPending]);
+
   const historyPathRef = useRef<string>("");
 
   const handleLoadHistory = useCallback(async (path: string) => {
     historyPathRef.current = path;
-    setIsHistoryLoading(true);
-    const [result] = await Promise.all([
-      loadHistory(path),
-      new Promise(r => setTimeout(r, 800)),
-    ]);
-    setState({ type: "complete", result });
-    setIsHistoryLoading(false);
+    try {
+      const result = await loadHistory(path);
+      setState({ type: "complete", result });
+    } catch (e: any) {
+      setState({ type: "error", message: e.message || "加载历史报告失败" });
+    }
   }, []);
 
-  // ── Handlers ──────────────────────────────────────────────────────
   const handleStartMultiple = useCallback(async (tickers: string[], baseConfig: Omit<AnalysisConfig, "ticker">) => {
-    setResult(null);
-    setError(null);
+    setDisplayName("");
     setProgress(null);
-    prevLatestCompletedIdRef.current = undefined;
-    // Resolve display name for the first ticker
     if (tickers.length > 0) {
       try {
         const m = await import("@/lib/api");
@@ -146,14 +156,25 @@ export default function App() {
         }
       } catch {}
     }
+    // Switch to running view — progress polling will pick it up
     setState({ type: "loading", target: "analysis" });
-    // Submit all tickers — backend queues them sequentially
     for (const ticker of tickers) {
       try {
         await startAnalysis({ ticker, ...baseConfig });
-      } catch { /* individual submission failure handled by task list */ }
+      } catch {}
     }
   }, []);
+
+  const handleShowProgress = useCallback((taskId: string) => {
+    setState({ type: "running", taskId });
+  }, []);
+
+  const handleShowResult = useCallback((taskId: string) => {
+    const result = completedResults[taskId];
+    if (result) {
+      setState({ type: "complete", result });
+    }
+  }, [completedResults]);
 
   const handleCancelTask = useCallback(async (tid: string) => {
     try {
@@ -167,44 +188,60 @@ export default function App() {
     }
     setState({ type: "idle" });
     setProgress(null);
-    setResult(null);
-    setError(null);
   }, [activeRunningTask]);
+
+  const handleBackToIdle = useCallback(() => {
+    setState({ type: "idle" });
+  }, []);
+
+  // ── Render ──
+  const renderMainContent = () => {
+    switch (state.type) {
+      case "idle":
+        return <WelcomeScreen />;
+      case "loading":
+        return <LoadingScreen label={state.target === "history" ? "正在加载历史报告…" : "正在启动分析…"} />;
+      case "running":
+        return progress
+          ? <ProgressPanel progress={progress} displayName={displayName || progress.analysisId} />
+          : <LoadingScreen label="正在启动分析…" />;
+      case "complete":
+        return <ReportViewer result={state.result} historyPath={historyPathRef.current} onBack={handleBackToIdle} />;
+      case "error":
+        return (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fadeIn">
+            <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-2xl mb-4">❌</div>
+            <div className="text-base text-red-400 mb-6">{state.message}</div>
+            <button onClick={() => setState({ type: "idle" })}
+              className="px-5 py-2 rounded-lg bg-[#111] border border-[#222] text-sm text-[#888] hover:text-[#f0ede8] hover:border-[#444] transition-all cursor-pointer"
+            >重新开始</button>
+          </div>
+        );
+      default:
+        return <WelcomeScreen />;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-[#0a0a0a]">
       <aside className="w-72 flex-shrink-0">
         <Sidebar
-          isRunning={state.type === "running" || state.type === "loading"}
+          isRunning={!!activeRunningTask}
           tasks={tasks}
+          runningProgress={progress}
+          runningDisplayName={displayName}
+          historyRefreshCounter={historyRefreshCounter}
           onStartMultiple={handleStartMultiple}
           onStopAnalysis={handleStop}
           onLoadHistory={handleLoadHistory}
           onCancelTask={handleCancelTask}
+          onShowProgress={handleShowProgress}
+          onShowResult={handleShowResult}
         />
       </aside>
       <main className="flex-1 overflow-auto relative">
-        {isHistoryLoading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0a0a0a]/80 backdrop-blur-sm">
-            <LoadingScreen label="正在加载历史报告…" />
-          </div>
-        )}
         <div className="p-6 lg:p-10 min-h-full">
-          {state.type === "idle" && <WelcomeScreen />}
-          {state.type === "loading" && state.target !== "history" && <LoadingScreen label="正在启动分析…" />}
-          {state.type === "running" && (progress ? <ProgressPanel progress={progress} displayName={displayName} /> : <LoadingScreen label="正在启动分析…" />)}
-          {state.type === "complete" && <ReportViewer result={state.result ?? result!} historyPath={historyPathRef.current} />}
-          {state.type === "error" && (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fadeIn">
-              <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-2xl mb-4">❌</div>
-              <div className="text-base text-red-400 mb-6">{state.message || error}</div>
-              <button onClick={() => { setState({ type: "idle" }); setError(null); setResult(null); }}
-                className="px-5 py-2 rounded-lg bg-[#111] border border-[#222] text-sm text-[#888] hover:text-[#f0ede8] hover:border-[#444] transition-all cursor-pointer"
-              >
-                重新开始
-              </button>
-            </div>
-          )}
+          {renderMainContent()}
         </div>
       </main>
     </div>

@@ -49,13 +49,30 @@ function GroupedDate({ dateLabel, count, children }: { dateLabel: string; count:
 interface SidebarProps {
   isRunning: boolean;
   tasks: TaskInfo[];
+  runningProgress: { currentStage: string; completedStages: string[]; elapsed: number } | null;
+  runningDisplayName: string;
+  historyRefreshCounter: number;
   onStartMultiple: (tickers: string[], config: Omit<AnalysisConfig, 'ticker'>) => void;
   onStopAnalysis: () => void;
   onLoadHistory: (path: string) => void;
   onCancelTask: (taskId: string) => void;
+  onShowProgress: (taskId: string) => void;
+  onShowResult: (taskId: string) => void;
 }
 
-export default function Sidebar({ isRunning, tasks, onStartMultiple, onStopAnalysis, onLoadHistory, onCancelTask }: SidebarProps) {
+export default function Sidebar({
+  isRunning,
+  tasks,
+  runningProgress,
+  runningDisplayName,
+  historyRefreshCounter,
+  onStartMultiple,
+  onStopAnalysis,
+  onLoadHistory,
+  onCancelTask,
+  onShowProgress,
+  onShowResult,
+}: SidebarProps) {
   const dateInputRef = useRef<HTMLInputElement>(null);
   const [tickerInput, setTickerInput] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -86,6 +103,13 @@ export default function Sidebar({ isRunning, tasks, onStartMultiple, onStopAnaly
   }, []);
 
   useEffect(() => { loadHistoryData(); }, [loadHistoryData]);
+  
+  // Refresh history when trigger counter changes (e.g. analysis completes)
+  useEffect(() => {
+    if (historyRefreshCounter > 0) {
+      getHistory().then(h => setHistory(h)).catch(() => {});
+    }
+  }, [historyRefreshCounter]);
 
 
 
@@ -297,7 +321,7 @@ export default function Sidebar({ isRunning, tasks, onStartMultiple, onStopAnaly
         )}
       </div>
 
-      {/* Task Queue */}
+      {/* Task Queue — clickable items */}
       {tasks.length > 0 && (
         <div className="px-4 py-3 border-t border-[#1a1a1a]">
           <div className="flex items-center justify-between mb-2.5">
@@ -309,31 +333,70 @@ export default function Sidebar({ isRunning, tasks, onStartMultiple, onStopAnaly
           </div>
           <div className="space-y-1">
             {tasks.map(t => {
-              const statusIcon = t.status === "running" ? "🔄" :
-                t.status === "pending" ? "⏳" :
-                t.status === "complete" ? "✅" :
-                t.status === "error" ? "❌" : "⏹️";
-              const statusText = t.status === "running" ? "分析中" :
-                t.status === "pending" ? "排队中" :
-                t.status === "complete" ? "已完成" :
-                t.status === "error" ? "失败" : "已取消";
+              const isRunning = t.status === "running";
+              const isComplete = t.status === "complete";
+              const isError = t.status === "error";
+              const isPending_ = t.status === "pending";
+              const statusIcon = isRunning ? "🔄" :
+                isPending_ ? "⏳" :
+                isComplete ? "✅" :
+                isError ? "❌" : "⏹️";
+              const statusText = isRunning ? "分析中" :
+                isPending_ ? "排队中" :
+                isComplete ? "已完成" :
+                isError ? "失败" : "已取消";
+              // Running task progress data (from the running task)
+              const isThisRunning = isRunning && runningProgress !== null;
+              const completedCount = isThisRunning ? runningProgress.completedStages.length : 0;
+              const totalStages = 12;
+              const progressPct = completedCount / totalStages;
+              const elapsedStr = isThisRunning
+                ? `${Math.floor((runningProgress.elapsed || 0) / 60)}:${String(Math.floor((runningProgress.elapsed || 0) % 60)).padStart(2, '0')}`
+                : "";
               return (
-                <div key={t.id}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs bg-[#0a0a0a] border border-[#1a1a1a]"
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    if (isRunning) onShowProgress(t.id);
+                    else if (isComplete) onShowResult(t.id);
+                    else if (isError) onShowResult(t.id);
+                  }}
+                  className="w-full text-left flex flex-col gap-1 px-2.5 py-2 rounded-lg text-xs bg-[#0a0a0a] border border-[#1a1a1a] hover:border-[#333] hover:bg-[#111] transition-all cursor-pointer group"
                 >
-                  <span className="flex-shrink-0">{statusIcon}</span>
-                  <span className="flex-1 truncate text-[#e8e6e1] font-medium">{t.displayName || t.ticker}</span>
-                  <span className="text-[10px] text-[#555] flex-shrink-0">{statusText}</span>
-                  {(t.status === "running" || t.status === "pending") && (
-                    <button
-                      onClick={() => onCancelTask(t.id)}
-                      className="text-[#444] hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
-                      title="取消任务"
-                    >
-                      ✕
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <span className="flex-shrink-0">{statusIcon}</span>
+                    <span className="flex-1 truncate text-[#e8e6e1] font-medium">
+                      {t.status === "running" && runningDisplayName ? runningDisplayName : (t.displayName || t.ticker)}
+                    </span>
+                    <span className="text-[10px] text-[#555] flex-shrink-0">{statusText}</span>
+                    {(isRunning || isPending_) && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); onCancelTask(t.id); }}
+                        className="text-[#444] hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
+                        title="取消任务"
+                      >✕</span>
+                    )}
+                  </div>
+                  {/* Mini progress bar for running task */}
+                  {isThisRunning && (
+                    <div className="flex items-center gap-2 pl-5">
+                      <div className="flex-1 h-1 rounded-full bg-[#1a1a1a] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#ff5a1f] transition-all duration-500"
+                          style={{ width: `${Math.max(progressPct * 100, 3)}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-[#555] whitespace-nowrap">
+                        {completedCount}/{totalStages} {elapsedStr}
+                      </span>
+                    </div>
                   )}
-                </div>
+                  {isThisRunning && runningProgress.currentStage !== "initializing" && (
+                    <div className="pl-5 text-[9px] text-[#666] truncate">
+                      {runningProgress.currentStage ? `当前: ${runningProgress.currentStage}` : ""}
+                    </div>
+                  )}
+                </button>
               );
             })}
           </div>

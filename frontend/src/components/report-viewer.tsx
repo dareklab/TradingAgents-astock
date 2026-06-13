@@ -8,6 +8,7 @@ import { exportPdf } from "@/lib/api";
 interface Props {
   result: AnalysisResult;
   historyPath?: string;
+  onBack?: () => void;
 }
 
 function signalStyle(signal: string): { color: string; bg: string; label: string } {
@@ -87,7 +88,7 @@ function AnalystTabs({ sections, state, analystTab, onTabChange }: {
   );
 }
 
-export default function ReportViewer({ result, historyPath }: Props) {
+export default function ReportViewer({ result, historyPath, onBack }: Props) {
   const { signal, elapsed, state } = result;
   const sc = signalStyle(signal);
   const [analystTab, setAnalystTab] = useState("");
@@ -174,6 +175,16 @@ export default function ReportViewer({ result, historyPath }: Props) {
             <MarkdownContent text={state.investment_plan} />
           </div>
         </div>
+      )}
+
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-xs text-[#555] hover:text-[#f0ede8] transition-colors cursor-pointer mb-4"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 12H5m7-7l-7 7 7 7" /></svg>
+          返回
+        </button>
       )}
 
       {/* Analyst Reports */}
