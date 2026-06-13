@@ -314,18 +314,43 @@ def _run_analysis(task: AnalysisTask):
         tracker.is_running = True
         last_chunk: dict = {}
 
+        # Start a heartbeat thread that emits elapsed-time updates every 1s
+        # so the frontend sees a live timer even while graph.stream() blocks
+        # on the first (or any) chunk.
+        _heartbeat_stop = threading.Event()
+
+        def _heartbeat_loop():
+            """Update progress.elapsed periodically while the graph runs."""
+            while not _heartbeat_stop.is_set():
+                _heartbeat_stop.wait(timeout=1.0)
+                if _heartbeat_stop.is_set():
+                    break
+                task.update_progress(**progress_emit())
+
+        heartbeat = threading.Thread(
+            target=_heartbeat_loop,
+            daemon=True,
+            name=f"heartbeat-{task.id[:8]}",
+        )
+
+
         # Set display_name early so the UI can show it during analysis
         try:
             dn = get_stock_display_name(task.ticker)
         except Exception:
             dn = task.ticker
+        tracker.current_stage = "initializing"
         task.update_progress(display_name=dn, **progress_emit())
+        heartbeat.start()
+
 
         # Execute the graph
         for chunk in ta.graph.stream(init_state, **args):
             if task.cancel_requested:
                 task.status = TASK_CANCELLED
                 task.update_progress(**progress_emit())
+                _heartbeat_stop.set()
+
                 return
 
             last_chunk = chunk
@@ -395,11 +420,16 @@ def _run_analysis(task: AnalysisTask):
             "analysis_time": analysis_time,
             "rating": last_chunk.get("rating", ""),
         }
+        _heartbeat_stop.set()
         task.status = TASK_COMPLETE
         task.update_progress(display_name=display_name, **progress_emit())
 
     except Exception as e:
         logger.exception("Analysis failed for %s on %s", task.ticker, trade_date)
+        try:
+            _heartbeat_stop.set()
+        except NameError:
+            pass
         task.status = TASK_ERROR
         task.error = str(e)
         task.update_progress(**progress_emit())

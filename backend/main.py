@@ -82,13 +82,6 @@ _frontend_dist = _PROJECT_ROOT / "frontend" / "dist"
 if _frontend_dist.is_dir():
     app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="frontend_assets")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_frontend(full_path: str):
-        from fastapi.responses import FileResponse
-        file_path = _frontend_dist / full_path
-        if file_path.is_file():
-            return FileResponse(str(file_path))
-        return FileResponse(str(_frontend_dist / "index.html"))
 else:
     logger.warning("Frontend dist not found at %s — API only", _frontend_dist)
 
@@ -327,6 +320,17 @@ async def api_get_task_result(task_id: str):
     if task.status == TASK_CANCELLED:
         return {"status": "cancelled"}
     return {"status": "complete", "result": task.result}
+
+# ── Serve frontend (catch-all, must be after all API routes) ──────────────
+
+if _frontend_dist.is_dir():
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        from fastapi.responses import FileResponse
+        file_path = _frontend_dist / full_path
+        if file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(_frontend_dist / "index.html"))
 
 # ── Entry ────────────────────────────────────────────────────────────────────
 
