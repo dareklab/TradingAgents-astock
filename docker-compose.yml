@@ -1,0 +1,15 @@
+services:
+  tradingagents:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - tradingagents_data:/home/appuser/.tradingagents
+    environment:
+      - TRADINGAGENTS_CACHE_DIR=/home/appuser/.tradingagents/cache
+    restart: unless-stopped
+
+volumes:
+  tradingagents_data:

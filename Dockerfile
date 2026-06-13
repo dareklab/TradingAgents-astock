@@ -1,3 +1,5 @@
+# ── Multi-stage build ──────────────────────────────────────────
+# Stage 1: install dependencies into a venv
 FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -8,23 +10,23 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /build
 
-# ── Layer 1: install dependencies (cached unless pyproject.toml changes) ──
 COPY pyproject.toml .
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -c "import tomllib; deps = tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']; print('\n'.join(deps))" > /tmp/reqs.txt && \
     pip install --no-cache-dir -r /tmp/reqs.txt
 
-# ── Layer 2: install package (re-runs on any code change, ~3s) ──
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --no-deps .
 
+# ── Final stage ────────────────────────────────────────────────
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    TRADINGAGENTS_CACHE_DIR=/home/appuser/.tradingagents/cache
 
-# Install CJK + emoji fonts (cached permanently — no dependency on builder)
+# CJK + emoji fonts for report rendering
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
@@ -36,11 +38,18 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 RUN useradd --create-home appuser && \
     mkdir -p /home/appuser/.tradingagents/cache && \
-    chown -R appuser:appuser /home/appuser/.tradingagents && \
-    su appuser -c "/opt/venv/bin/python -m mootdx bestip" || true
-USER appuser
-WORKDIR /home/appuser/app
+    chown -R appuser:appuser /home/appuser/.tradingagents
 
 COPY --from=builder --chown=appuser:appuser /build .
 
-ENTRYPOINT ["tradingagents"]
+# Pre-configure mootdx on first build (best-effort)
+RUN su appuser -c "python -m mootdx bestip" 2>/dev/null || true
+
+USER appuser
+WORKDIR /home/appuser/app
+
+EXPOSE 8000
+
+# Default: run web UI (backend API + frontend)
+# Override with `docker run --entrypoint tradingagents ...` for CLI mode
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -21,6 +21,7 @@ if load_dotenv:
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from backend.task_manager import get_manager
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -75,6 +76,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve built frontend static files
+_frontend_dist = _PROJECT_ROOT / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")
+else:
+    logger.warning("Frontend dist not found at %s — API only", _frontend_dist)
 
 # Active analyses managed by TaskManager
 
