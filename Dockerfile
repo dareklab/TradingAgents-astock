@@ -1,4 +1,3 @@
-# ── Multi-stage build ──────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -10,33 +9,26 @@ ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /build
 
 COPY pyproject.toml .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir uvicorn fastapi && \
+RUN pip install --no-cache-dir uvicorn fastapi && \
     python -c "import tomllib; deps = tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']; print('\n'.join(deps))" > /tmp/reqs.txt && \
     pip install --no-cache-dir -r /tmp/reqs.txt
 
 COPY . .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir --no-deps .
+RUN pip install --no-cache-dir --no-deps . && \
+    rm -rf /root/.cache/pip
 
-# ── Final stage ────────────────────────────────────────────────
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TRADINGAGENTS_CACHE_DIR=/home/appuser/.tradingagents/cache
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y --no-install-recommends fonts-wqy-microhei && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-
-# Uninstall unused heavy packages
-RUN pip uninstall -y pyarrow pydeck streamlit lxml altair pillow tornado 2>/dev/null || true
 
 RUN useradd --create-home appuser && \
     mkdir -p /home/appuser/app /home/appuser/.tradingagents/cache && \

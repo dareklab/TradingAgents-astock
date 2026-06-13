@@ -272,7 +272,7 @@ def _run_analysis(task: AnalysisTask):
     as it progresses.
     """
     from backend.progress import ProgressTracker, PIPELINE_STAGES, STAGE_IDS
-    from cli.stats_handler import StatsCallbackHandler
+    from backend.stats_handler import StatsCallbackHandler
     from tradingagents.dataflows.a_stock import resolve_ticker, get_stock_display_name
     from tradingagents.dataflows.trading_calendar import resolve_analysis_date
     try:

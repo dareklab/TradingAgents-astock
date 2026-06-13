@@ -3,11 +3,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: tradingagents-web
     ports:
       - "8000:8000"
     volumes:
       - ./.tradingagents:/home/appuser/.tradingagents
-    environment:
-      - TRADINGAGENTS_CACHE_DIR=/home/appuser/.tradingagents/cache
+      - ./.env:/home/appuser/app/.env
+    env_file:
+      - .env
+    networks:
+      - trading-net
     restart: unless-stopped
 
+networks:
+  trading-net:
+    driver: bridge

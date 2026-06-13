@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tradingagents-astock"
 version = "0.2.11"
-description = "A股多Agent投研框架 — 基于 TradingAgents 深度特化"
+description = "A股多Agent投研Web系统"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
@@ -21,54 +21,23 @@ dependencies = [
     "langgraph>=0.4.8",
     "langgraph-checkpoint-sqlite>=2.0.0",
     "pandas>=2.3.0",
-    "parsel>=1.10.0",
     "pytz>=2025.2",
-    "questionary>=2.1.0",
     "redis>=6.2.0",
     "requests>=2.32.4",
-    "rich>=14.0.0",
-    "typer>=0.21.0",
     "setuptools>=80.9.0",
     "stockstats>=0.6.5",
-    "tqdm>=4.67.1",
     "typing-extensions>=4.14.0",
     "yfinance>=0.2.63",
-    "streamlit>=1.45.0",
     "fpdf2>=2.8.0",
     "python-dotenv>=1.1.0",
     "mootdx>=0.10.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.34.0",
-    "sse-starlette>=3.0.0",
     "exchange_calendars>=4.0",
 ]
-
-[project.urls]
-Homepage = "https://github.com/simonlin1212/tradingagents-astock"
-Repository = "https://github.com/simonlin1212/tradingagents-astock"
-Issues = "https://github.com/simonlin1212/tradingagents-astock/issues"
-Upstream = "https://github.com/TauricResearch/TradingAgents"
 
 [project.optional-dependencies]
 google = ["langchain-google-genai>=4.0.0"]
 
-[project.scripts]
-tradingagents = "cli.main:app"
-
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*", "backend*"]
-
-[tool.setuptools.package-data]
-cli = ["static/*"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-ra --strict-markers"
-markers = [
-    "unit: fast isolated unit tests",
-    "integration: tests requiring external services",
-    "smoke: quick sanity-check tests",
-]
-filterwarnings = [
-    "ignore::DeprecationWarning",
-]
+include = ["tradingagents*", "backend*"]
