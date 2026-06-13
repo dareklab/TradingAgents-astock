@@ -55,9 +55,42 @@ const ANALYST_SECTIONS: [string, string, string][] = [
   ["lockup_report", "🔒", "解禁/减持"],
 ];
 
+function AnalystTabs({ sections, state, analystTab, onTabChange }: {
+  sections: [string, string, string][];
+  state: Record<string, string>;
+  analystTab: string;
+  onTabChange: (v: string) => void;
+}) {
+  const available = sections.filter(([key]) => state[key]);
+  const tab = analystTab && available.some(([k]) => k === analystTab) ? analystTab : available[0][0];
+  const content = state[tab];
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1 mb-4">
+        {available.map(([key, icon, title]) => (
+          <button key={key} onClick={() => onTabChange(key)}
+            className={`px-4 py-2 rounded-lg text-base font-medium transition-all cursor-pointer ${
+              tab === key
+                ? "bg-[#ff5a1f] text-white shadow-sm"
+                : "bg-[#111] text-[#666] border border-[#222] hover:text-[#f0ede8] hover:bg-[#1a1a1a]"
+            }`}>
+            {icon} {title}
+          </button>
+        ))}
+      </div>
+      {content && (
+        <div className="bg-[#0d0d0d] rounded-xl p-4 border border-[#222]">
+          <MarkdownContent text={content} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ReportViewer({ result, historyPath }: Props) {
   const { signal, elapsed, state } = result;
   const sc = signalStyle(signal);
+  const [analystTab, setAnalystTab] = useState("");
   const [debateTab, setDebateTab] = useState("bull");
   const [riskTab, setRiskTab] = useState("judge");
 
@@ -149,19 +182,12 @@ export default function ReportViewer({ result, historyPath }: Props) {
           <span className="text-base">📊</span>
           <h2 className="text-lg font-bold text-[#f0ede8] tracking-tight">分析师报告</h2>
         </div>
-        <div className="space-y-1.5">
-          {ANALYST_SECTIONS.map(([key, icon, title]) => {
-            const content = (state as Record<string, string>)[key];
-            if (!content) return null;
-            return (
-              <Collapsible key={key} title={`${icon} ${title}`} className="mb-0">
-                <div className="max-h-96 overflow-y-auto">
-                  <MarkdownContent text={content} />
-                </div>
-              </Collapsible>
-            );
-          })}
-        </div>
+                  <AnalystTabs
+            sections={ANALYST_SECTIONS}
+            state={state}
+            analystTab={analystTab}
+            onTabChange={setAnalystTab}
+          />
       </div>
 
       {/* Bull/Bear Debate */}
