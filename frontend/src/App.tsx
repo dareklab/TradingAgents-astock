@@ -33,12 +33,12 @@ export default function App() {
   const [completedResults, setCompletedResults] = useState<Record<string, AnalysisResult>>({});
 
   // Poll task list — always on so the sidebar refreshes after submitting an analysis
-  // When no active tasks exist, poll at a lower frequency (10s) to reduce log noise
   useEffect(() => {
     let cancelled = false;
     const poll = () => {
       listTasks().then(newTasks => {
         if (cancelled) return;
+        console.log('[TASK] poll:', JSON.stringify(newTasks.map((t: any) => ({ticker: t.ticker, status: t.status}))));
         setTasks(newTasks);
       }).catch(() => {});
     };
@@ -166,6 +166,7 @@ export default function App() {
   }, []);
 
   const handleStartMultiple = useCallback(async (tickers: string[], baseConfig: Omit<AnalysisConfig, "ticker">) => {
+    console.log('[TASK] submit tickers:', JSON.stringify(tickers));
     setDisplayName("");
     setProgress(null);
     if (tickers.length > 0) {
@@ -177,12 +178,16 @@ export default function App() {
         }
       } catch {}
     }
-    // Switch to running view (only if starting fresh from idle)
     setState(prev => prev.type === "idle" ? { type: "loading", target: "analysis" } : prev);
     for (const ticker of tickers) {
       try {
-        await startAnalysis({ ticker, ...baseConfig });
-      } catch {}
+        console.log('[TASK] submitting:', ticker);
+        const res = await startAnalysis({ ticker, ...baseConfig });
+        console.log('[TASK] submitted ok:', JSON.stringify(res));
+      } catch (e: any) {
+        console.error('[TASK] submit FAILED:', ticker, e);
+        setError(`${ticker} 提交失败: ${e.message || e}`);
+      }
     }
   }, []);
 

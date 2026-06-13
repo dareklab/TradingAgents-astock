@@ -140,10 +140,13 @@ class TaskManager:
         while True:
             task = self._dequeue_next()
             if task is None:
-                # No tasks — wait for a new one
+                logger.debug("[WORKER] no tasks, waiting...")
                 self._worker_event.wait(timeout=5)
                 self._worker_event.clear()
+                logger.debug("[WORKER] woke up, checking for tasks")
                 continue
+
+            logger.info("[WORKER] starting task %s (%s)", task.ticker, task.id[:8])
 
             # Execute the task (blocking call)
             try:
@@ -153,6 +156,8 @@ class TaskManager:
                 task.status = TASK_ERROR
                 task.error = str(e)
                 task.update_progress()
+            
+            logger.info("[WORKER] task %s (%s) finished, status=%s", task.ticker, task.id[:8], task.status)
 
     def _dequeue_next(self) -> AnalysisTask | None:
         """Return the oldest pending task, or None."""
@@ -166,6 +171,11 @@ class TaskManager:
             # FIFO: oldest creation time first
             pending.sort(key=lambda t: t.created_at)
             task = pending[0]
+            logger.debug("[QUEUE] _dequeue_next picked %s (%s, created=%.3f) from %d pending",
+                           task.ticker, task.id[:8], task.created_at, len(pending))
+            for p in pending:
+                logger.debug("[QUEUE]   pending: %s (%s, created=%.3f)",
+                               p.ticker, p.id[:8], p.created_at)
             task.status = TASK_RUNNING
             return task
 
