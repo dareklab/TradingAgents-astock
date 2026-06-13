@@ -27,6 +27,14 @@ Breaking changes within the 0.x line are called out explicitly.
   终端 stderr 日志也增加时间戳。
   —— `backend/main.py`
 
+- **开始分析后自动切到进度视图** — `handleStartMultiple` 提交任务后立即 `setState("loading")`，
+  进度轮询生效后自动切换到 `ProgressPanel`，不再停留在原页面。
+- **按钮始终可用** — 运行中也可继续添加股票排队，`disabled` 仅绑定 `resolving` 状态，
+  不再因 `isRunning` 禁用。
+- **多股票排队支持** — 后端 `TaskManager` 支持单 worker 队列，
+  新提交的任务自动进入 pending 状态，运行中任务完成后自动启动下一个。
+  —— `frontend/src/components/sidebar.tsx` / `frontend/src/App.tsx`
+
 ### Fixed
 
 - **前端轮询永久关闭** — `shouldPoll` 逻辑过于复杂，初始 `tasks=[]` 时 `hasActive=false`
@@ -43,6 +51,15 @@ Breaking changes within the 0.x line are called out explicitly.
 
 - **概念名称日志噪音** — `Could not resolve Chinese name` 从 WARNING 降为 INFO。
   —— `tradingagents/dataflows/utils.py`
+- **加载→运行状态过渡** — 修复点击"开始分析"后页面卡在"正在启动分析…"不进入进度面板的问题。
+  在进度轮询 `useEffect` 中增加 `setState` 自动过渡逻辑：检测到 `state.type === "loading"` 且有正在运行的任务时，
+  自动切换到 `{ type: "running" }` 状态，让用户看到实时进度面板。
+  —— `frontend/src/App.tsx`
+
+- **再次提交不重置视图** — `handleStartMultiple` 仅在 `state.type === "idle"` 时切换为 `"loading"`，
+  运行中/已完成的视图不会被新建分析打断，用户可继续浏览当前内容。
+  —— `frontend/src/App.tsx`
+
 ### Fixed
 
 - **评级提取全路径统一** — 5 个不同函数（`parse_rating` / `_extract_rating_from_text` /

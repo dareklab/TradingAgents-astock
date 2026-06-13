@@ -70,6 +70,14 @@ export default function App() {
 
     setDisplayName(prev => prev || activeRunningTask.displayName || activeRunningTask.ticker);
 
+    // Auto-transition from "loading" to "running" once a running task is detected
+    setState(prev => {
+      if (prev.type === "loading" && prev.target === "analysis") {
+        return { type: "running", taskId: activeRunningTask.id };
+      }
+      return prev;
+    });
+
     let cancelled = false;
     const poll = async () => {
       try {
@@ -169,8 +177,8 @@ export default function App() {
         }
       } catch {}
     }
-    // Switch to running view — progress polling will pick it up
-    setState({ type: "loading", target: "analysis" });
+    // Switch to running view (only if starting fresh from idle)
+    setState(prev => prev.type === "idle" ? { type: "loading", target: "analysis" } : prev);
     for (const ticker of tickers) {
       try {
         await startAnalysis({ ticker, ...baseConfig });

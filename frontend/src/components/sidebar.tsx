@@ -193,7 +193,7 @@ export default function Sidebar({
             value={tickerInput}
             onChange={e => { setTickerInput(e.target.value); setError(""); setSuccessMsg(""); }}
             onKeyDown={e => { if (e.key === "Enter" && tickerInput.trim() && !resolving) { handleStart(); } }}
-            disabled={isRunning || resolving}
+            disabled={resolving}
           />
 
           <div>
@@ -204,7 +204,7 @@ export default function Sidebar({
                 type="date"
                 value={tradeDate}
                 onChange={e => setTradeDate(e.target.value)}
-                disabled={isRunning || resolving}
+                disabled={resolving}
                 className="w-full h-10 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] px-3 py-2 text-sm text-[#f0ede8] focus:outline-none focus:border-[#ff5a1f] focus:ring-1 focus:ring-[#ff5a1f]/30 disabled:opacity-40 transition-colors [color-scheme:dark]"
               />
               {/* 透明覆盖层：点击整个区域触发日期选择 */}
@@ -250,16 +250,9 @@ export default function Sidebar({
             </div>
           )}
 
-          {isRunning ? (
-            <Button variant="secondary" className="w-full" onClick={onStopAnalysis}>
-              <svg className="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              停止分析
-            </Button>
-          ) : (
-            <Button className="w-full" disabled={!tickerInput.trim() || resolving} onClick={handleStart}>
-              {resolving ? "解析中…" : "开始分析"}
-            </Button>
-          )}
+          <Button className="w-full" disabled={!tickerInput.trim() || resolving} onClick={handleStart}>
+            {resolving ? "解析中…" : "开始分析"}
+          </Button>
         </div>
       </div>
 
@@ -332,7 +325,14 @@ export default function Sidebar({
             </span>
           </div>
           <div className="space-y-1">
-            {tasks.map(t => {
+            {[...tasks].sort((a, b) => {
+              // Running first, then pending, then completed/error, all in FIFO (oldest created_at first within each group)
+              const statusOrder: Record<string, number> = { running: 0, pending: 1, complete: 2, error: 3, cancelled: 4 };
+              const sa = statusOrder[a.status] ?? 5;
+              const sb = statusOrder[b.status] ?? 5;
+              if (sa !== sb) return sa - sb;
+              return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            }).map(t => {
               const isRunning = t.status === "running";
               const isComplete = t.status === "complete";
               const isError = t.status === "error";

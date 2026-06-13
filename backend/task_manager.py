@@ -216,7 +216,9 @@ class TaskManager:
 
     def list_tasks(self) -> list[dict[str, Any]]:
         with self._lock:
-            return [t.to_dict() for t in self._tasks.values()]
+            # Return tasks sorted by created_at (FIFO: oldest first, i.e. first submitted = first to run)
+            sorted_tasks = sorted(self._tasks.values(), key=lambda t: t.created_at)
+            return [t.to_dict() for t in sorted_tasks]
 
     def cancel(self, task_id: str) -> bool:
         task = self.get(task_id)
