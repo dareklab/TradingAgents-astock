@@ -178,7 +178,7 @@ export default function Sidebar({
           <span className="text-[#e8e6e1]">-</span>
           <span className="text-[#ff5a1f]">Astock</span>
         </div>
-        <div className="text-[11px] text-[#555] mt-0.5 tracking-wider">A股多Agent投研系统</div>
+        <div className="text-[11px] text-[#555] mt-0.5 tracking-wider">A股Agent投研系统</div>
       </div>
 
       <div className="mx-4 h-px bg-[#1a1a1a]" />

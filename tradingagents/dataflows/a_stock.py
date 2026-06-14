@@ -109,9 +109,12 @@ def _build_name_code_map() -> tuple[dict[str, str], dict[str, str]]:
             name = str(row["name"]).strip()
             if not _re.match(r"^[036]\d{5}$", code):
                 continue
-            clean_name = name.replace(" ", "").replace("　", "")
+            clean_name = name.replace(" ", "").replace("　", "").replace("\x00", "")
             n2c[clean_name] = code
-            c2n[code] = clean_name
+            # Some codes appear in both SZ and SH markets with different names;
+            # prefer the longer name (usually the meaningful full name).
+            if code not in c2n or len(clean_name) > len(c2n[code]):
+                c2n[code] = clean_name
 
     _name_to_code = n2c
     _code_to_name = c2n

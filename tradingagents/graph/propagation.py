@@ -8,6 +8,16 @@ from tradingagents.agents.utils.agent_states import (
 )
 
 
+def _resolve_company_name(code: str) -> str:
+    """Resolve a stock code to its Chinese display name."""
+    try:
+        from tradingagents.dataflows.a_stock import get_stock_display_name
+        name = get_stock_display_name(code)
+        return name if name else code
+    except Exception:
+        return code
+
+
 class Propagator:
     """Handles state initialization and propagation through the graph."""
 
@@ -19,9 +29,10 @@ class Propagator:
         self, company_name: str, trade_date: str, past_context: str = ""
     ) -> Dict[str, Any]:
         """Create the initial state for the agent graph."""
+        resolved_name = _resolve_company_name(company_name)
         return {
-            "messages": [("human", company_name)],
-            "company_of_interest": company_name,
+            "messages": [("human", resolved_name)],
+            "company_of_interest": resolved_name,
             "trade_date": str(trade_date),
             "past_context": past_context,
             "investment_debate_state": InvestDebateState(

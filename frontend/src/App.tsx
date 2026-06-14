@@ -186,6 +186,26 @@ export default function App() {
       }
       return prev;
     });
+    // Pre-fill tasks locally so they appear immediately in the sidebar queue
+    const now = new Date().toISOString();
+    const prefilled: TaskInfo[] = tickers.map((ticker, i) => ({
+      id: `pending-${ticker}-${Date.now()}-${i}`,
+      ticker,
+      tradeDate: baseConfig.tradeDate || now.split("T")[0],
+      status: "pending",
+      displayName: ticker,
+      createdAt: now,
+      elapsed: 0,
+      completedStages: [],
+      currentStage: "",
+      llmCalls: 0,
+      toolCalls: 0,
+      tokensIn: 0,
+      tokensOut: 0,
+      progress: {},
+    }));
+    setTasks(prev => [...prev, ...prefilled]);
+
     for (const ticker of tickers) {
       try {
         console.log('[TASK] submitting:', ticker);

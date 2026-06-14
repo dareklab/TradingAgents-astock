@@ -85,7 +85,9 @@ Be decisive and ground every conclusion in specific evidence from the analysts.{
             final_trade_decision, rating = result
         else:
             final_trade_decision = result
-            rating = ""
+            # On free-text fallback, extract rating from the decision text immediately
+            from tradingagents.agents.utils.rating import parse_rating
+            rating = parse_rating(final_trade_decision)
 
         new_risk_debate_state = {
             "judge_decision": final_trade_decision,
