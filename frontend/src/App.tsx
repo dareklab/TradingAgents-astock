@@ -48,6 +48,8 @@ export default function App() {
   }, []);
 
   const activeRunningTask = useMemo(() => findRunningTask(tasks), [tasks]);
+  const activeRunningTaskRef = useRef(activeRunningTask);
+  activeRunningTaskRef.current = activeRunningTask;
   const latestCompletedTask = useMemo(() => findLatestCompleted(tasks), [tasks]);
   const hasPending = useMemo(() => tasks.some(t => t.status === "pending"), [tasks]);
 
@@ -66,9 +68,17 @@ export default function App() {
       }
       return;
     }
+
+    const taskChanged = prevRunningIdRef.current !== activeRunningTask.id;
     prevRunningIdRef.current = activeRunningTask.id;
 
-    setDisplayName(prev => prev || activeRunningTask.displayName || activeRunningTask.ticker);
+    // When the running task switches, always update displayName to the new task.
+    // Otherwise, only fill in if empty (e.g. initial load).
+    if (taskChanged) {
+      setDisplayName(activeRunningTask.displayName || activeRunningTask.ticker);
+    } else {
+      setDisplayName(prev => prev || activeRunningTask.displayName || activeRunningTask.ticker);
+    }
 
     // Auto-transition from "loading" to "running" once a running task is detected
     setState(prev => {
@@ -167,17 +177,23 @@ export default function App() {
 
   const handleStartMultiple = useCallback(async (tickers: string[], baseConfig: Omit<AnalysisConfig, "ticker">) => {
     console.log('[TASK] submit tickers:', JSON.stringify(tickers));
-    setDisplayName("");
-    setProgress(null);
-    if (tickers.length > 0) {
-      try {
-        const m = await import("@/lib/api");
-        const resolved = await m.resolveTickerWithName(tickers[0]);
-        if (resolved.displayName && resolved.displayName !== tickers[0]) {
-          setDisplayName(resolved.displayName);
-        }
-      } catch {}
+
+    // Only reset display name and resolve ticker when starting fresh (no running task)
+    const hasRunningTask = !!activeRunningTaskRef.current;
+    if (!hasRunningTask) {
+      setDisplayName("");
+      setProgress(null);
+      if (tickers.length > 0) {
+        try {
+          const m = await import("@/lib/api");
+          const resolved = await m.resolveTickerWithName(tickers[0]);
+          if (resolved.displayName && resolved.displayName !== tickers[0]) {
+            setDisplayName(resolved.displayName);
+          }
+        } catch {}
+      }
     }
+
     // Only switch view and reset progress when starting fresh from idle
     setState(prev => {
       if (prev.type === "idle") {
