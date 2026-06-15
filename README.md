@@ -5,21 +5,9 @@
   <sub>7 位 AI 分析师 → 多空辩论 → 三方风控 → 投资决策</sub>
 </p>
 
-<p align="center">
-  <a href="https://github.com/TauricResearch/TradingAgents">TauricResearch/TradingAgents</a>（65K ⭐）的 A 股深度特化 Fork<br>
-  Apache 2.0 开源 · <code>pip install</code> 即跑 · 零外部付费依赖
-</p>
 
 <p align="center">
   <b>⚠️ 免责声明：本项目仅供学习研究与技术演示，不构成任何投资建议。</b>
-</p>
-
-<p align="center">
-  <a href="https://github.com/simonlin1212/tradingagents-astock/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/simonlin1212/tradingagents-astock?style=social"/></a>
-  <a href="https://github.com/simonlin1212/tradingagents-astock/network/members"><img alt="Forks" src="https://img.shields.io/github/forks/simonlin1212/tradingagents-astock?style=social"/></a>
-  <a href="https://arxiv.org/abs/2412.20138"><img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv:2412.20138-B31B1B?logo=arxiv"/></a>
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue"/></a>
-  <a href="https://pypi.org/project/tradingagents-astock/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python"/></a>
 </p>
 
 ---
@@ -223,16 +211,53 @@ API 文档：启动后端后访问 `http://localhost:8000/docs`
 ```
 TradingAgents-Astock/
 ├── tradingagents/
-│   ├── agents/          # Agent 层：7 分析师 + 研究员 + 风控 + 管理者 + 交易员
-│   ├── dataflows/       # 数据层：A 股 API 直连（a_stock.py ~2200 行）
-│   ├── graph/           # LangGraph 流程编排：拓扑/传播/条件路由/信号/反思/检查点
-│   ├── llm_clients/     # LLM 工厂：OpenAI / Anthropic / Google / Azure 多供应商适配
+│   ├── agents/
+│   │   ├── analysts/          # 7 位分析师（含 A 股特化 Prompt）
+│   │   ├── researchers/       # Bull / Bear 多空研究员
+│   │   ├── risk_mgmt/         # 激进 / 保守 / 中立三方风控
+│   │   ├── managers/          # Research Manager + Portfolio Manager
+│   │   ├── trader/            # 交易员（A 股 T+1/涨跌停约束）
+│   │   ├── utils/             # 工具函数、状态定义、记忆、评级解析
+│   │   ├── quality_gate.py    # 质量门控（硬校验 + LLM 复审）
+│   │   └── schemas.py         # Pydantic 结构化输出 Schema
+│   ├── dataflows/
+│   │   ├── a_stock.py         # 核心：A 股数据 HTTP 直连（~2200 行）
+│   │   ├── interface.py       # Vendor 路由 + fallback
+│   │   ├── trading_calendar.py
+│   │   └── utils.py           # Ticker 安全校验与中文名称解析
+│   ├── graph/
+│   │   ├── trading_graph.py   # 主入口：TradingAgentsGraph
+│   │   ├── setup.py           # LangGraph 拓扑定义
+│   │   ├── propagation.py     # 状态初始化与传播
+│   │   ├── conditional_logic.py
+│   │   ├── signal_processing.py
+│   │   ├── reflection.py      # 交易反思（CSI 300 基准）
+│   │   └── checkpointer.py    # SQLite 检查点续跑
+│   ├── llm_clients/
+│   │   ├── factory.py         # 工厂模式创建客户端
+│   │   ├── openai_client.py   # OpenAI 兼容（含 reasoning_effort）
+│   │   ├── anthropic_client.py
+│   │   ├── google_client.py
+│   │   ├── azure_client.py
+│   │   └── model_catalog.py   # 模型选项目录
 │   └── default_config.py
-├── backend/             # FastAPI：任务队列 / 历史记录 / PDF 导出
-├── frontend/            # React + TypeScript + Tailwind + Radix UI
+├── backend/
+│   ├── main.py                # FastAPI 入口
+│   ├── task_manager.py        # 后台任务队列
+│   ├── history.py             # 历史记录
+│   ├── progress.py            # 进度追踪
+│   └── pdf_export.py          # PDF 报告（跨平台中文）
+├── frontend/
+│   └── src/
+│       ├── App.tsx            # 主页面状态机
+│       ├── components/        # 侧边栏 / 进度面板 / 报告渲染
+│       └── lib/               # API 封装 / 类型定义
 ├── pyproject.toml
-├── Dockerfile / docker-compose.yml
-└── dev.sh
+├── Dockerfile
+├── docker-compose.yml
+├── dev.sh
+├── CHANGELOG.md
+└── NOTICE
 ```
 
 ---
