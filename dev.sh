@@ -75,7 +75,7 @@ echo "=============================================="
 
 # 1. Ensure mootdx servers are configured
 echo ""
-echo "[1/3] Checking A-stock data gateway (mootdx)..."
+echo "[1/4] Checking A-stock data gateway (mootdx)..."
 if [ -f "$HOME/.mootdx/config.json" ]; then
   BESTIP=$("$PYTHON" -c "
 import json
@@ -112,15 +112,62 @@ fi
 
 # 2. Start backend API
 echo ""
-echo "[2/3] Starting Backend API (port 8000)..."
+echo "[2/4] Starting Backend API (port 8000)..."
 "$PYTHON" -u backend/main.py &
 BACKEND_PID=$!
 
-# 3. Start frontend dev server
+# 3. Build & start frontend
 echo ""
-echo "[3/3] Starting Frontend Dev Server (port 5173)..."
-cd frontend
-pnpm dev &
+echo "[3/4] Building frontend..."
+
+# Locate pnpm (corepack shims or global install)
+PNPM=""
+for candidate in \
+    /usr/local/lib/node_modules/corepack/shims/pnpm \
+    /opt/homebrew/lib/node_modules/corepack/shims/pnpm \
+    "$(command -v pnpm 2>/dev/null)"; do
+    if [ -x "$candidate" ]; then
+        PNPM="$candidate"
+        break
+    fi
+done
+
+if [ -z "$PNPM" ]; then
+    echo "  ⚠️  pnpm not found. Installing via npm..."
+    npm install -g pnpm 2>&1 | tail -1
+    PNPM="/usr/local/lib/node_modules/corepack/shims/pnpm"
+    if [ ! -x "$PNPM" ]; then
+        PNPM="$(command -v pnpm 2>/dev/null || echo '')"
+    fi
+fi
+
+if [ -z "$PNPM" ]; then
+    echo "  ❌ Cannot find pnpm. Please install it manually: npm install -g pnpm"
+    kill $BACKEND_PID 2>/dev/null
+    exit 1
+fi
+
+cd "$PROJECT_DIR/frontend"
+
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo "  → Installing frontend dependencies..."
+    "$PNPM" install 2>&1 | tail -5
+fi
+
+# Build static assets so backend can serve them
+echo "  → Building dist..."
+"$PNPM" build 2>&1 | tail -5
+
+if [ -d "$PROJECT_DIR/frontend/dist" ]; then
+    echo "  ✓ Frontend dist built"
+else
+    echo "  ⚠️  Frontend dist not found — backend will run API-only"
+fi
+
+echo ""
+echo "[4/4] Starting Frontend Dev Server (port 5173)..."
+"$PNPM" dev &
 FRONTEND_PID=$!
 
 cd "$PROJECT_DIR"
