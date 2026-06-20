@@ -345,7 +345,7 @@ def _em_get(url, params=None, headers=None, timeout=15, max_retries=2, **kwargs)
             last_exc = e
             if attempt < max_retries:
                 backoff = 2 ** attempt  # 1s, 2s
-                logger.info(
+                logger.debug(
                     "_em_get attempt %d/%d failed for %s: %s, retrying in %ds",
                     attempt + 1, max_retries + 1, url, e, backoff,
                 )
@@ -1801,109 +1801,94 @@ def get_fund_flow(
         bool, "Include historical daily fund flow (last 20 days)"
     ] = True,
 ) -> str:
-    """Get individual stock fund flow from 东财 push2.
+    """Compute fund flow proxy from OHLCV data (mootdx).
 
-    Realtime: minute-level main/large/medium/small/super order net inflow.
-    History: daily net inflow for 20 trading days (push2his).
+    push2.eastmoney.com is blocked in Docker and from non-public IPs.  Since
+    百度 PAE fund flow was taken offline (2026-05) and no other free HTTP
+    API provides classified big/small-order flow, we compute a reasonable
+    proxy from raw OHLCV data: Money Flow = Typical Price × Volume.
 
-    V0.2.7: replaced 百度 PAE (fundflow/fundsortlist, offline since 2026-05)
-    with 东财 push2 fund flow API.
+    This captures the *magnitude and direction* of capital flow across days
+    even though it cannot separate orders by participant type (主力/散户).
     """
+    from tradingagents.dataflows.stockstats_utils import _clean_dataframe
+
     code = _normalize_ticker(ticker)
-    secid = f"1.{code}" if code.startswith("6") else f"0.{code}"
     lines = [
         f"# Fund Flow for {code} (A-stock)",
-        f"# Source: 东财 push2 (Eastmoney)",
+        f"# Source: computed from mootdx OHLCV (push2 blocked in this environment)",
         f"# Retrieved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "",
     ]
 
     try:
-        # Realtime minute-level fund flow
-        url_rt = "https://push2.eastmoney.com/api/qt/stock/fflow/kline/get"
-        params_rt = {
-            "secid": secid, "klt": 1,
-            "fields1": "f1,f2,f3,f7",
-            "fields2": "f51,f52,f53,f54,f55,f56,f57",
-        }
-        r = _em_get(url_rt, params=params_rt, timeout=10)
-        d = r.json()
-        klines = d.get("data", {}).get("klines", [])
+        # Fetch daily K-line from mootdx (last ~100 trading days for sufficient history)
+        client = _get_mootdx_client()
+        df = client.kline(symbol=code, frequency=9, start=0, offset=100)
+        if df is None or df.empty or len(df) < 3:
+            return "\n".join(lines) + "\nNo OHLCV data available for fund flow computation."
 
-        if klines:
-            lines.append(
-                "## Realtime Minute Flow "
-                "(主力/小单/中单/大单/超大单 净流入, 元)"
-            )
-            for line in klines[-10:]:
-                parts = line.split(",")
-                if len(parts) >= 6:
-                    lines.append(
-                        f"  {parts[0]}: "
-                        f"主力={float(parts[1])/1e4:.0f}万 "
-                        f"大单={float(parts[4])/1e4:.0f}万 "
-                        f"超大单={float(parts[5])/1e4:.0f}万"
-                    )
-
-            last_parts = klines[-1].split(",")
-            if len(last_parts) >= 2:
-                main_net = float(last_parts[1])
-                lines.append(
-                    f"\nClose: 主力净流入={main_net/1e4:.0f}万元"
-                )
-                if main_net > 0:
-                    lines.append(
-                        "Signal: Net main force INFLOW (bullish)"
-                    )
-                elif main_net < 0:
-                    lines.append(
-                        "Signal: Net main force OUTFLOW (bearish)"
-                    )
-        else:
-            lines.append(
-                "No realtime fund flow (non-trading hours or holiday)"
-            )
-
-        # Historical daily fund flow (push2his)
-        if include_history:
-            url_hist = (
-                "https://push2his.eastmoney.com"
-                "/api/qt/stock/fflow/daykline/get"
-            )
-            params_hist = {
-                "secid": secid, "lmt": 20, "klt": 101,
-                "fields1": "f1,f2,f3,f7",
-                "fields2": "f51,f52,f53,f54,f55,f56,f57",
+        # Standardize columns
+        df = df.rename(
+            columns={
+                "open": "Open", "close": "Close", "high": "High",
+                "low": "Low", "volume": "Volume",
             }
-            rh = _em_get(url_hist, params=params_hist, timeout=10)
-            dh = rh.json()
-            hist_klines = dh.get("data", {}).get("klines", [])
+        )
+        if "date" in df.columns:
+            df["Date"] = pd.to_datetime(df["date"])
+        elif "Date" not in df.columns:
+            df["Date"] = pd.to_datetime(df.index)
+        df = _clean_dataframe(df)
 
-            if hist_klines:
+        # Keep last 25 trading days (20 + buffer)
+        df = df.tail(min(25, len(df)))
+        dates = [str(d).split(" ")[0] for d in df.get("date", df.index)]
+
+        # Compute daily Money Flow: Typical Price * Volume
+        tp = (df["high"] + df["low"] + df["close"]) / 3
+        money_flow = tp * df["volume"]
+
+        # Realtime (latest day) summary
+        latest_idx = len(df) - 1
+        latest_mf = float(money_flow.iloc[latest_idx])
+        prev_mf = float(money_flow.iloc[latest_idx - 1]) if latest_idx > 0 else latest_mf
+        net_flow = latest_mf - prev_mf
+
+        lines.append("## Realtime Flow (computed from OHLCV)")
+        lines.append(f"  Latest Money Flow: {latest_mf/1e8:.2f} 亿")
+        lines.append(f"  Previous: {prev_mf/1e8:.2f} 亿")
+        lines.append(f"  Net Change: {net_flow/1e8:.2f} 亿")
+        if net_flow > 0:
+            lines.append("  Signal: Net money flow INCREASE (bullish proxy)")
+        else:
+            lines.append("  Signal: Net money flow DECREASE (bearish proxy)")
+
+        # Compute Volume-Weighted Average Price change as additional signal
+        latest_vwap = float(tp.iloc[latest_idx])
+        prev_vwap = float(tp.iloc[latest_idx - 1]) if latest_idx > 0 else latest_vwap
+        vwap_change = (latest_vwap - prev_vwap) / prev_vwap * 100
+        lines.append(f"  VWAP change: {vwap_change:+.2f}%")
+
+        # Historical daily fund flow (last 20 days)
+        if include_history and len(df) >= 2:
+            lines.append(f"\n## Historical Daily Fund Flow (last {min(20, len(df))} trading days)")
+            lines.append("Date       | 资金流(亿) | 变动(亿) | 方向")
+            for i in range(max(0, len(df) - 20), len(df)):
+                day_mf = float(money_flow.iloc[i])
+                prev_day_mf = float(money_flow.iloc[i - 1]) if i > 0 else day_mf
+                delta = day_mf - prev_day_mf
+                direction = "+" if delta > 0 else "-"
+                date_str = str(dates[i]) if i < len(dates) else "?"
                 lines.append(
-                    f"\n## Historical Daily Fund Flow "
-                    f"(last {len(hist_klines)} trading days)"
+                    f"  {date_str} | {day_mf/1e8:8.2f} | {delta/1e8:+8.2f} | {direction}"
                 )
-                lines.append(
-                    "Date | 主力净流入(万) | 大单(万) "
-                    "| 中单(万) | 小单(万) | 超大单(万)"
-                )
-                for line in hist_klines:
-                    parts = line.split(",")
-                    if len(parts) >= 6:
-                        lines.append(
-                            f"  {parts[0]} "
-                            f"| main={float(parts[1])/1e4:.0f} "
-                            f"| large={float(parts[4])/1e4:.0f} "
-                            f"| mid={float(parts[3])/1e4:.0f} "
-                            f"| small={float(parts[2])/1e4:.0f} "
-                            f"| super={float(parts[5])/1e4:.0f}"
-                        )
 
         return "\n".join(lines)
 
     except Exception as e:
-        return f"Error fetching fund flow for {code}: {str(e)}"
+        logger.warning("Fund flow computation failed for %s: %s", code, e)
+        return f"Error computing fund flow for {code}: {str(e)}"
 
 
 # ---------------------------------------------------------------------------
@@ -2142,48 +2127,17 @@ def get_industry_comparison(
     code = safe_ticker_component(ticker)
     lines = [f"# 行业横向对比 | {code} | {trade_date}"]
 
-    # 东财 push2 行业板块排名 (direct HTTP, replaces 同花顺 which has 401)
+    # 百度股市通: concept/sector/industry blocks the stock belongs to.
+    # push2.eastmoney.com provides a full industry ranking but is blocked in
+    # Docker and from non-public IPs; 百度 PAE gives the relevant sectors
+    # with their current change percentages, which is sufficient context.
     try:
-        url = "https://push2.eastmoney.com/api/qt/clist/get"
-        params = {
-            "pn": "1",
-            "pz": "100",
-            "po": "1",
-            "np": "1",
-            "fltt": "2",
-            "invt": "2",
-            "fs": "m:90+t:2",
-            "fields": "f2,f3,f4,f12,f13,f14,f104,f105,f128,f136,f140,f141,f207",
-        }
-        r = _em_get(url, params=params, timeout=15)
-        d = r.json()
-        items = d.get("data", {}).get("diff", [])
-
-        if items:
-            lines.append(
-                f"\n## 全行业表现 (东财 {len(items)} 个行业)"
-            )
-            lines.append(
-                "排名 | 行业 | 涨跌幅 | 上涨 | 下跌 | 领涨股"
-            )
-            for i, item in enumerate(items):
-                name = item.get("f14", "")
-                change_pct = item.get("f3", 0)
-                up_count = item.get("f104", 0)
-                down_count = item.get("f105", 0)
-                leader = item.get("f140", "")
-                lines.append(
-                    f"  {i+1}. {name} "
-                    f"| {change_pct}% "
-                    f"| {up_count} "
-                    f"| {down_count} "
-                    f"| {leader}"
-                )
-                if i >= top_n * 2 - 1:
-                    lines.append(f"  ... (showing top/bottom {top_n})")
-                    break
+        blocks_text = get_concept_blocks(code)
+        if blocks_text and not blocks_text.startswith("Baidu PAE error"):
+            lines.append("")
+            lines.append(blocks_text)
         else:
-            lines.append("行业数据获取为空。")
+            lines.append("行业/概念板块数据暂不可用。")
     except Exception as e:
         lines.append(f"行业对比查询失败: {e}")
 
