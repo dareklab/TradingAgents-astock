@@ -185,24 +185,26 @@ class PortfolioDecision(BaseModel):
     )
     executive_summary: str = Field(
         description=(
-            "A concise action plan covering entry strategy, position sizing, "
-            "key risk levels, and time horizon. Two to four sentences."
+            "A concise short-term action plan covering entry strategy, position sizing, "
+            "key risk levels, stop-loss, take-profit, and the 1-3 day time horizon. "
+            "Two to four sentences."
         ),
     )
     investment_thesis: str = Field(
         description=(
-            "Detailed reasoning anchored in specific evidence from the analysts' "
-            "debate. If prior lessons are referenced in the prompt context, "
-            "incorporate them; otherwise rely solely on the current analysis."
+            "Short-term reasoning anchored in specific catalysts and signals from the "
+            "analysts' debate (momentum, capital flows, policy events, lockup changes). "
+            "If prior lessons are referenced, incorporate them; otherwise rely solely on "
+            "the current analysis. Focus on what will move the stock in 1-3 days."
         ),
     )
     price_target: Optional[float] = Field(
         default=None,
-        description="Optional target price in the instrument's quote currency.",
+        description="Optional short-term price target in the instrument's quote currency.",
     )
     time_horizon: Optional[str] = Field(
         default=None,
-        description="Optional recommended holding period, e.g. '3-6 months'.",
+        description="Recommended holding period, e.g. '1-3 trading days' (short-term swing).",
     )
 
 

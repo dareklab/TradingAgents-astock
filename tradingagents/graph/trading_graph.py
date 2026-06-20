@@ -225,7 +225,7 @@ class TradingAgentsGraph:
         }
 
     def _fetch_returns(
-        self, ticker: str, trade_date: str, holding_days: int = 5
+        self, ticker: str, trade_date: str, holding_days: int | None = None
     ) -> Tuple[Optional[float], Optional[float], Optional[int]]:
         """Fetch raw and alpha return for ticker over holding_days from trade_date.
 
@@ -233,6 +233,8 @@ class TradingAgentsGraph:
         (None, None, None) if price data is unavailable (too recent, delisted,
         or network error).
         """
+        if holding_days is None:
+            holding_days = self.config.get("holding_days", 3)
         try:
             start = datetime.strptime(trade_date, "%Y-%m-%d")
             end = start + timedelta(days=holding_days + 7)  # buffer for weekends/holidays

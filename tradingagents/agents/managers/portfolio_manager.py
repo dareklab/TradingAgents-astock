@@ -39,7 +39,7 @@ def create_portfolio_manager(llm):
             else ""
         )
 
-        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
+        prompt = f"""As a short-term swing trader Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision for a **1-3 trading day holding period** (max 5 days).
 
 {instrument_context}
 
@@ -53,14 +53,22 @@ def create_portfolio_manager(llm):
 - ST/delisting risk: ST or *ST status signals regulatory warning; factor into position sizing
 - Margin eligibility: not all A-shares are margin-eligible; assume cash-only unless stated
 
+**Short-Term Swing Trading Rules** (CRITICAL — 3-day horizon, max 5):
+- Your holding period is **up to 3 trading days, never more than 5** — prioritise setups with immediate catalysts, not long-term narratives
+- Favor high-momentum signals from the Hot Money Tracker, short-term capital flows, and dragon-tiger board activity over slow-moving fundamentals
+- Policy catalysts and lockup/block-trade events are especially relevant: they can resolve within your holding window
+- Long-term fundamentals (PE mean-reversion, multi-quarter earnings trends) are secondary — only consider them if they align with an immediate catalyst
+- Position sizing should reflect the shorter horizon: tighter stops, quicker profit-taking
+- If no clear 1-3 day catalyst exists, err toward Hold/Underweight — do not stretch a long-term thesis into a short-term trade
+
 ---
 
 **Rating Scale** (use exactly one):
-- **Buy**: Strong conviction to enter or add to position
-- **Overweight**: Favorable outlook, gradually increase exposure
-- **Hold**: Maintain current position, no action needed
-- **Underweight**: Reduce exposure, take partial profits
-- **Sell**: Exit position or avoid entry
+- **Buy**: High-conviction short-term entry — clear catalyst, strong momentum, favourable risk/reward within 3 days
+- **Overweight**: Constructive bias but wait for confirmation before adding size
+- **Hold**: No compelling short-term edge; stand aside
+- **Underweight**: Reduce exposure, lock in short-term profits, or scale out on weakening momentum
+- **Sell**: Exit immediately — catalyst failed, momentum reversed, or risk/reward no longer justifies the position
 
 **Context:**
 - Research Manager's investment plan: **{research_plan}**
@@ -71,7 +79,7 @@ def create_portfolio_manager(llm):
 
 ---
 
-Be decisive and ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
+Be decisive and ground every conclusion in specific short-term signals from the analysts.{get_language_instruction()}"""
 
         result = invoke_structured_or_freetext(
             structured_llm,

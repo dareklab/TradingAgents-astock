@@ -32,6 +32,11 @@ DEFAULT_CONFIG = {
     # Internal agent debate stays in English for reasoning quality
     "output_language": "Chinese",
     # Debate and discussion settings
+    # Holding period: number of trading days used by the back-end outcome
+    # tracker and recommended to agents as the investment horizon.  Default
+    # 3 days targets short-term swing trading (1-3 days, max 5).
+    "holding_days": 3,
+    # Debate and discussion settings
     "max_debate_rounds": 1,
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
