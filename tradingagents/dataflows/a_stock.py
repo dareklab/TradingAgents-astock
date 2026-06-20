@@ -846,44 +846,19 @@ def get_fundamentals(
         except Exception as e:
             logger.warning("mootdx finance failed for %s: %s", code, e)
 
-        # --- Eastmoney push2: basic stock info (direct HTTP) ---
-        # push2.eastmoney.com blocks Docker/non-public IPs.  Most fields are
-        # already covered by Tencent (market cap) and mootdx (total/float shares).
-        # Only 行业 (industry) and 上市日期 (listing date) are push2-unique.
-        # Warn once per stock code then degrade silently.
-        _push2_warned: set[str] = getattr(get_fundamentals, "_push2_warned", set())
+        # --- Tencent: market cap (mootdx already provides industry, IPO date,
+        # and share counts above; push2 is redundant and blocked in Docker) ---
         try:
-            market_code = 1 if code.startswith("6") else 0
-            _info_url = "https://push2.eastmoney.com/api/qt/stock/get"
-            _info_params = {
-                "fltt": "2",
-                "invt": "2",
-                "fields": "f57,f58,f84,f85,f127,f116,f117,f189,f43",
-                "secid": f"{market_code}.{code}",
-            }
-            r = _em_get(_info_url, params=_info_params, timeout=10)
-            d = r.json().get("data", {})
-            if d:
-                if d.get("f127"):
-                    lines.append(f"行业: {d['f127']}")
-                if d.get("f84"):
-                    lines.append(f"总股本: {d['f84']}")
-                if d.get("f85"):
-                    lines.append(f"流通股本: {d['f85']}")
-                if d.get("f116"):
-                    lines.append(f"总市值: {d['f116']}")
-                if d.get("f117"):
-                    lines.append(f"流通市值: {d['f117']}")
-                if d.get("f189"):
-                    lines.append(f"上市日期: {d['f189']}")
+            tq = _tencent_quote([code])
+            if code in tq:
+                mcap = tq[code].get("mcap_yi")
+                float_mcap = tq[code].get("float_mcap_yi")
+                if mcap:
+                    lines.append(f"总市值: {mcap} 亿")
+                if float_mcap:
+                    lines.append(f"流通市值: {float_mcap} 亿")
         except Exception as e:
-            if code not in _push2_warned:
-                logger.info(
-                    "eastmoney push2 unavailable for %s (expected in Docker): %s",
-                    code, e,
-                )
-                _push2_warned.add(code)
-                get_fundamentals._push2_warned = _push2_warned  # type: ignore[attr-defined]
+            logger.info("Tencent quote failed for %s: %s", code, e)
 
         # --- 同花顺 direct HTTP: consensus EPS forecast ---
         try:
