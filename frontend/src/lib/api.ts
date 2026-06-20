@@ -50,8 +50,8 @@ export async function getModels(provider: string): Promise<ModelCatalog | null> 
   }
 }
 
-export async function startAnalysis(config: AnalysisConfig): Promise<{ taskId: string }> {
-  return apiPost<{ taskId: string }>("/analyze", config);
+export async function startAnalysis(config: AnalysisConfig): Promise<{ taskId: string; displayName?: string }> {
+  return apiPost<{ taskId: string; displayName?: string }>("/analyze", config);
 }
 
 export async function getTask(taskId: string): Promise<TaskInfo> {

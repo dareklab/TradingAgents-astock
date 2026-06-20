@@ -40,6 +40,11 @@ export default function App() {
         if (cancelled) return;
         console.log('[TASK] poll:', JSON.stringify(newTasks.map((t: any) => ({ticker: t.ticker, status: t.status}))));
         setTasks(newTasks);
+        // Keep displayName in sync with the running task (backend may update it)
+        const running = newTasks.find(t => t.status === "running");
+        if (running?.displayName && running.displayName !== running.ticker) {
+          setDisplayName(prev => prev || running.displayName);
+        }
       }).catch(() => {});
     };
     poll();

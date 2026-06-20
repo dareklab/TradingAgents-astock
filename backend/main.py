@@ -295,14 +295,21 @@ async def api_analyze(req: AnalyzeRequest):
     ticker = req.ticker
     trade_date = req.tradeDate
 
+    # Resolve display name immediately so task queue shows the stock name from the start
+    try:
+        display_name = get_stock_display_name(ticker)
+    except Exception:
+        display_name = ticker
+
     mgr = get_manager()
-    task = mgr.submit(ticker, trade_date, config)
+    task = mgr.submit(ticker, trade_date, config, display_name=display_name)
 
     return {
         "taskId": task.id,
         "ticker": task.ticker,
         "tradeDate": task.trade_date,
         "status": task.status,
+        "displayName": display_name,
     }
 
 from backend.task_manager import TASK_PENDING, TASK_RUNNING, TASK_COMPLETE, TASK_ERROR, TASK_CANCELLED
