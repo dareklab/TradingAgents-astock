@@ -269,11 +269,12 @@ export default function Sidebar({
         ) : (
           <div className="space-y-2.5">
             {(() => {
-              // Group by date
+              // Group by analysis run date (time field), not the target trade date
               const groups: Record<string, typeof history> = {};
               for (const entry of history) {
-                if (!groups[entry.date]) groups[entry.date] = [];
-                groups[entry.date].push(entry);
+                const runDate = entry.time ? entry.time.slice(0, 10) : entry.date;
+                if (!groups[runDate]) groups[runDate] = [];
+                groups[runDate].push(entry);
               }
               const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
               return sortedDates.map(date => {

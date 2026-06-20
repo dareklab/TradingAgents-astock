@@ -427,7 +427,7 @@ class TradingAgentsGraph:
         directory = Path(self.config["results_dir"]) / safe_ticker / "TradingAgentsStrategy_logs"
         directory.mkdir(parents=True, exist_ok=True)
 
-        log_path = directory / f"full_states_log_{trade_date}.json"
+        log_path = directory / f"full_states_log_{datetime.now().strftime('%Y-%m-%d')}.json"
         with open(log_path, "w", encoding="utf-8") as f:
             json.dump(self.log_states_dict[str(trade_date)], f, indent=4)
 
