@@ -163,6 +163,7 @@ export default function Sidebar({
       const names = resolved.map(r => r.name).join(", ");
       setSuccessMsg(names.length > 20 ? `${codes.length} 只股票` : names);
       onStartMultiple(codes, baseConfig());
+      setTickerInput("");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "解析失败");
     } finally { setResolving(false); }
