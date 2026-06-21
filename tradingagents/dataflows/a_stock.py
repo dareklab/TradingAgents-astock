@@ -1095,6 +1095,56 @@ def get_income_statement(
 # ---- 7. get_news ----
 
 
+def _fetch_announcements_cninfo(name: str, start_date: str, end_date: str, page_size: int = 20) -> list[dict]:
+    """Search official company announcements via 巨潮资讯网 (cninfo.com.cn).
+
+    巨潮 is the China Securities Regulatory Commission's designated
+    information disclosure platform.  Returns PDF links to original
+    company filings: annual reports, material event announcements,
+    regulatory filings, IPO prospectuses, etc.
+    """
+    url = "http://www.cninfo.com.cn/new/fulltextSearch/full"
+    params = {
+        "searchkey": name,
+        "sdate": start_date,
+        "edate": end_date,
+        "isfulltext": "false",
+        "sortName": "pubdate",
+        "sortType": "desc",
+        "pageNum": 1,
+        "pageSize": page_size,
+    }
+    headers = {
+        "User-Agent": _UA,
+        "Referer": "http://www.cninfo.com.cn/",
+    }
+    resp = _requests.get(url, params=params, headers=headers, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    articles: list[dict] = []
+    for item in data.get("announcements") or []:
+        title = item.get("announcementTitle", "").replace("<em>", "").replace("</em>", "")
+        sec_name = item.get("secName", "")
+        pdf_path = item.get("adjunctUrl", "")
+        pdf_url = f"https://www.cninfo.com.cn/new/disclosure/{pdf_path}" if pdf_path else ""
+        ts_ms = item.get("announcementTime", 0)
+        try:
+            ts_s = ts_ms / 1000
+            pub_time = datetime.fromtimestamp(ts_s).strftime("%Y-%m-%d %H:%M")
+        except (ValueError, OSError):
+            pub_time = start_date
+
+        articles.append({
+            "title": title,
+            "content": f"[{sec_name} 官方公告] 全文PDF: {pdf_url}",
+            "time": pub_time,
+            "source": f"巨潮资讯网 ({sec_name})",
+            "url": pdf_url,
+        })
+    return articles
+
+
 def _fetch_news_eastmoney(code: str, page_size: int = 20) -> list[dict]:
     """Direct East Money search API for individual stock news."""
     url = "https://search-api-web.eastmoney.com/search/jsonp"
@@ -1189,8 +1239,20 @@ def get_news(
     start_date: Annotated[str, "Start date yyyy-mm-dd"],
     end_date: Annotated[str, "End date yyyy-mm-dd"],
 ) -> str:
-    """Get stock-specific news via East Money direct API (Sina as fallback)."""
+    """Get stock-specific announcements and news.
+
+    Primary: 巨潮资讯网 (cninfo.com.cn) — official company announcements,
+    annual reports, material event filings.  Authoritative PDF source.
+
+    Fallback: 东方财富 search API → 新浪财经 HTML parsing.
+    """
     code = _normalize_ticker(ticker)
+
+    # Resolve display name for 巨潮 keyword search (name is more precise than code)
+    try:
+        stock_name = get_stock_display_name(code).split("(")[0]
+    except Exception:
+        stock_name = code
 
     start_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_dt = datetime.strptime(end_date, "%Y-%m-%d")
@@ -1198,12 +1260,22 @@ def get_news(
     articles: list[dict] = []
     source_label = ""
 
+    # 1. Primary: 巨潮资讯网 — official company announcements
     try:
-        articles = _fetch_news_eastmoney(code)
-        source_label = "东方财富"
+        articles = _fetch_announcements_cninfo(stock_name, start_date, end_date)
+        source_label = "巨潮资讯网"
     except Exception as e:
-        logger.warning("East Money news fetch failed for %s: %s", code, e)
+        logger.info("CNINFO fetch failed for %s (%s): %s", code, stock_name, e)
 
+    # 2. Fallback: 东方财富 search API
+    if not articles:
+        try:
+            articles = _fetch_news_eastmoney(code)
+            source_label = "东方财富"
+        except Exception as e:
+            logger.warning("East Money news fetch failed for %s: %s", code, e)
+
+    # 3. Last resort: 新浪财经
     if not articles:
         try:
             articles = _fetch_news_sina(code)
@@ -1246,7 +1318,7 @@ def get_news(
         )
 
     return (
-        f"## {code} (A-stock) News, from {start_date} to {end_date}:\n\n"
+        f"## {code} ({stock_name}) Announcements & News, from {start_date} to {end_date}:\n\n"
         + news_str
     )
 
