@@ -47,6 +47,8 @@ function GroupedDate({ dateLabel, count, children }: { dateLabel: string; count:
 }
 
 interface SidebarProps {
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   isRunning: boolean;
   tasks: TaskInfo[];
   runningProgress: { currentStage: string; completedStages: string[]; elapsed: number } | null;
@@ -61,6 +63,8 @@ interface SidebarProps {
 }
 
 export default function Sidebar({
+  collapsed,
+  onToggleCollapse,
   isRunning,
   tasks,
   runningProgress,
@@ -90,7 +94,11 @@ export default function Sidebar({
 
   const loadHistoryData = useCallback(() => {
     setIsLoadingHistory(true);
-    getHistory().then(h => setHistory(h)).catch(() => {}).finally(() => setIsLoadingHistory(false));
+    const minDelay = new Promise(r => setTimeout(r, 1000));
+    Promise.all([
+      getHistory().then(h => setHistory(h)),
+      minDelay,
+    ]).catch(() => {}).finally(() => setIsLoadingHistory(false));
   }, []);
 
   const handleRefresh = useCallback(async () => {
@@ -172,14 +180,25 @@ export default function Sidebar({
   return (
     <div className="flex h-full flex-col bg-[#0d0d0d] border-r border-[#1a1a1a]">
       {/* Logo */}
-      <div className="px-4 pt-5 pb-3 text-center">
-        <div className="text-base font-bold tracking-tight">
-          <span className="text-[#ff5a1f]">Trading</span>
-          <span className="text-[#e8e6e1]">Agents</span>
-          <span className="text-[#e8e6e1]">-</span>
-          <span className="text-[#ff5a1f]">Astock</span>
+      <div className="px-4 pt-5 pb-3 relative">
+        <div className="text-center">
+          <div className="text-base font-bold tracking-tight">
+            <span className="text-[#ff5a1f]">Trading</span>
+            <span className="text-[#e8e6e1]">Agents</span>
+            <span className="text-[#e8e6e1]">-</span>
+            <span className="text-[#ff5a1f]">Astock</span>
+          </div>
+          <div className="text-[11px] text-[#555] mt-0.5 tracking-wider">A股Agent投研系统</div>
         </div>
-        <div className="text-[11px] text-[#555] mt-0.5 tracking-wider">A股Agent投研系统</div>
+        <button
+          onClick={onToggleCollapse}
+          className="absolute right-1 top-4 w-6 h-6 flex items-center justify-center rounded text-[#555] hover:text-[#f0ede8] hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+          title="折叠侧边栏"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+          </svg>
+        </button>
       </div>
 
       <div className="mx-4 h-px bg-[#1a1a1a]" />
@@ -265,7 +284,15 @@ export default function Sidebar({
           <h4 className="text-xs font-semibold text-[#888] tracking-wider uppercase">历史记录</h4>
           <button onClick={handleRefresh} disabled={isRefreshing} className="text-[#555] hover:text-[#ff5a1f] transition-colors text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">{isRefreshing || isLoadingHistory ? "加载中…" : "刷新"}</button>
         </div>
-        {history.length === 0 ? (
+        {isLoadingHistory ? (
+          <div className="flex flex-col items-center justify-center py-8 gap-3">
+            <svg className="w-5 h-5 text-[#555] animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span className="text-xs text-[#555]">加载历史记录…</span>
+          </div>
+        ) : history.length === 0 ? (
           <p className="text-xs text-[#444]">暂无历史记录</p>
         ) : (
           <div className="space-y-2.5">

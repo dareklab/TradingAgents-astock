@@ -6,6 +6,7 @@ import ProgressPanel from "@/components/progress-panel";
 import ReportViewer from "@/components/report-viewer";
 import { loadHistory, listTasks, cancelTask, getTask, getTaskResult, startAnalysis, type TaskInfo } from "@/lib/api";
 import type { AnalysisConfig, AnalysisResult, ProgressState } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type AppState =
   | { type: "idle" }
@@ -25,6 +26,7 @@ function findLatestCompleted(tasks: TaskInfo[]): TaskInfo | undefined {
 }
 
 export default function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [state, setState] = useState<AppState>({ type: "idle" });
   const [tasks, setTasks] = useState<TaskInfo[]>([]);
   const [historyRefreshCounter, setHistoryRefreshCounter] = useState(0);
@@ -298,8 +300,10 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-[#0a0a0a]">
-      <aside className="w-72 flex-shrink-0">
+      <aside className={cn("flex-shrink-0 transition-all duration-300 overflow-hidden", sidebarCollapsed ? "w-0" : "w-72")}>
         <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(c => !c)}
           isRunning={!!activeRunningTask}
           tasks={tasks}
           runningProgress={progress}
@@ -313,6 +317,17 @@ export default function App() {
           onShowResult={handleShowResult}
         />
       </aside>
+      {sidebarCollapsed && (
+        <button
+          onClick={() => setSidebarCollapsed(false)}
+          className="absolute top-4 left-3 z-20 w-7 h-7 flex items-center justify-center rounded-lg bg-[#0d0d0d] border border-[#1a1a1a] text-[#555] hover:text-[#f0ede8] hover:border-[#444] transition-all cursor-pointer shadow-lg"
+          title="展开侧边栏"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
       <main className="flex-1 overflow-auto relative">
         <div className="p-6 lg:p-10 min-h-full">
           {renderMainContent()}
